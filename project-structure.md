@@ -12,7 +12,7 @@ nutritional-psychiatry-dataset/
 │   ├── data_collection/
 │   │   ├── usda-api.py             # Interface with USDA FoodData Central API (uses hyphen)
 │   │   ├── openfoodfacts-api.py    # OpenFoodFacts API integration (new)
-│   │   ├── literature_extract.py   # Extract data from research papers
+│   │   ├── literature-extract.py   # Extract data from research papers
 │   │   └── config.py               # Configuration settings
 │   ├── data_processing/
 │   │   ├── transform.py            # Transform raw data to our schema
@@ -42,8 +42,8 @@ nutritional-psychiatry-dataset/
 └── docs/
     ├── methodology.md               # Detailed methodology description
     ├── data-dictionary.md           # Field definitions (uses hyphen)
-    ├── literature_review.md         # Literature review for key relationships
-    ├── ai_methodology.md            # AI enrichment approach
+    ├── literature-review.md         # Literature review for key relationships
+    ├── ai-methodology.md            # AI enrichment approach
     └── examples/
         ├── jupyter/                 # Example Jupyter notebooks
         └── visualizations/          # Data visualizations

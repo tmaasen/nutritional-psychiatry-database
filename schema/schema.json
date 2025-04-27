@@ -318,7 +318,6 @@
         }
       }
     },
-    
     "nutrient_interactions": {
       "type": "array",
       "description": "Interactions between nutrients affecting mental health",
@@ -387,7 +386,6 @@
         }
       }
     },
-    
     "contextual_factors": {
       "type": "object",
       "description": "Contextual factors affecting nutrient impact",
@@ -495,7 +493,6 @@
         }
       }
     },
-    
     "population_variations": {
       "type": "array",
       "description": "Variations in response by different populations",
@@ -551,7 +548,6 @@
         }
       }
     },
-    
     "dietary_patterns": {
       "type": "array",
       "description": "Whole dietary patterns this food contributes to",
@@ -575,7 +571,6 @@
         }
       }
     },
-    
     "inflammatory_index": {
       "type": "object",
       "description": "Food's inflammatory potential",
@@ -601,7 +596,6 @@
         }
       }
     },
-    
     "neural_targets": {
       "type": "array",
       "description": "Neural pathways affected by food components",
@@ -633,7 +627,6 @@
         }
       }
     },
-    
     "data_quality": {
       "type": "object",
       "description": "Data quality metrics",

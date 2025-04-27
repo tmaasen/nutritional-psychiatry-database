@@ -6,6 +6,11 @@ A comprehensive open-source dataset connecting food nutrients to mental health i
 
 This project aims to create the first comprehensive, open-source dataset that connects food composition to mental health impacts based on nutritional psychiatry research. By enhancing standard food data with brain-specific nutrients and evidence-based mental health relationships, we're building a foundation for research and applications at the intersection of nutrition and mental wellness.
 
+[Data Collection & Processing Methodology](/docs/methodology.md)
+[AI Methodology](/docs/ai-methodology.md)
+[Data Dictionary](/docs/data-dictionary.md)
+[Literature Review Methodology](/docs/literature-review.md)
+
 ### The Problem
 
 Current food databases like USDA FoodData Central provide excellent general nutritional information but lack:
@@ -123,7 +128,7 @@ export OPENAI_API_KEY=your_openai_key  # Only needed for AI enrichment
 #### Collecting USDA Data
 
 ```bash
-python scripts/data_collection/usda_api.py
+python scripts/data_collection/usda-api.py
 ```
 
 #### Transforming to Our Schema
