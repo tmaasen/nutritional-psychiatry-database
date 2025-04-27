@@ -1,0 +1,26 @@
+{
+    "template_id": "nutrient_interactions",
+    "description": "Identifies interactions between nutrients that affect mental health outcomes",
+    "implementation_path": "scripts/ai/prompt_templates/nutrient_interactions.json",
+    "system_prompt": "You are a neurobiochemistry expert specializing in nutrient synergies and interactions. Your task is to identify research-backed interactions between nutrients that affect brain function and mental health.\n\nGuidelines:\n1. Focus on interactions with established research evidence\n2. Explain biochemical mechanisms behind interactions\n3. Categorize interaction types (synergistic, antagonistic, required_cofactor, etc.)\n4. Rate confidence based on quality of research evidence\n5. Include relevant biochemical pathways affected\n6. Reference specific foods that demonstrate this interaction\n7. Cite relevant research where possible\n8. Format as structured JSON with specific fields\n9. Be specific about how interactions affect mental health outcomes",
+    "user_prompt_template": "Analyze potential nutrient interactions in {{food_name}} ({{food_category}}) that affect brain function and mental health.\n\nNutritional profile:\n{{full_nutrient_profile_json}}\n\n{% if scientific_context %}Scientific context:\n{{scientific_context}}{% endif %}\n\nIdentify 1-3 key nutrient interactions in this food that impact brain function or mental health. For each interaction, provide:\n1. Interaction type (synergistic, antagonistic, required_cofactor, protective, inhibitory)\n2. Nutrients involved (list of 2+ nutrients)\n3. Pathway affected (specific biochemical pathway)\n4. Mechanism of action (detailed biochemical mechanism)\n5. Mental health relevance (how this affects brain function/mental health)\n6. Confidence rating (1-10 scale based on evidence quality)\n7. Supporting research (citations when available)\n\nFormat your response as a JSON array of interaction objects:\n[\n  {\n    \"interaction_id\": \"int_001\",\n    \"interaction_type\": \"synergistic\",\n    \"nutrients_involved\": [\"omega3_dha_mg\", \"vitamin_e_mg\"],\n    \"pathway\": \"antioxidant_protection\",\n    \"mechanism\": \"Vitamin E prevents oxidation of DHA, maintaining its functional properties in neuronal membranes\",\n    \"mental_health_relevance\": \"Preserves omega-3 neuroprotective effects against depression and cognitive decline\",\n    \"confidence\": 8,\n    \"research_support\": [\"PMID: 25336507\", \"DOI: 10.3390/nu6104491\"],\n    \"foods_demonstrating\": [\"salmon\", \"walnuts\"]\n  },\n  {...}\n]",
+    "validation_criteria": [
+      "Interactions involve nutrients present in the food",
+      "Mechanisms explain biochemical interactions",
+      "Mental health relevance is clearly explained",
+      "Confidence ratings reflect evidence quality",
+      "Interactions have biological plausibility",
+      "Format matches the requested JSON structure",
+      "Research citations support claimed interactions"
+    ],
+    "known_answer_test": {
+      "food": "Yogurt, Greek, plain",
+      "known_interactions": [
+        {
+          "nutrients": ["calcium_mg", "vitamin_d_mcg"],
+          "interaction_type": "synergistic",
+          "confidence_threshold": 7
+        }
+      ]
+    }
+  }

@@ -21,7 +21,7 @@ nutritional-psychiatry-dataset/
 │   │   └── food-source-prioritization.py # Multi-source data integration (new)
 │   └── ai/
 │       ├── prompt_templates/        # Templates for AI data enrichment
-│       ├── openai_client.py         # OpenAI API integration
+│       ├── openai-client.py         # OpenAI API integration
 │       └── evaluation.py            # Evaluate AI-generated data
 ├── data/
 │   ├── raw/

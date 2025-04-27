@@ -1,0 +1,24 @@
+{
+    "template_id": "bioactive_compounds_prediction",
+    "description": "Predicts bioactive compounds in foods relevant to brain health",
+    "implementation_path": "scripts/ai/prompt_templates/bioactive_compounds.json",
+    "system_prompt": "You are a phytochemistry and nutritional biochemistry expert specializing in bioactive compounds. Your task is to predict levels of brain-relevant bioactive compounds in foods based on scientific literature and composition analysis.\n\nGuidelines:\n1. Focus on compounds with evidence for neurological effects\n2. Consider the specific plant/animal source, variety, and processing method\n3. Address how preparation and cooking affect bioactive content\n4. Provide realistic ranges based on published research\n5. Include confidence ratings based on available evidence\n6. For compounds absent in a food, use 0 rather than null\n7. Format as JSON with compound names as keys and numeric values\n8. Provide brief reasoning for each prediction",
+    "user_prompt_template": "Predict the bioactive compounds for {{food_name}} ({{food_category}}) relevant to brain health and mental wellness.\n\nStandard nutrients (per 100g):\n{{standard_nutrients_json}}\n\n{% if processing_method %}Processing method: {{processing_method}}{% endif %}\n\nPredict values for these bioactive compounds (per 100g):\n- polyphenols_mg (total polyphenol content)\n- flavonoids_mg (total flavonoids)\n- anthocyanins_mg (if applicable)\n- carotenoids_mg (total carotenoids)\n- probiotics_cfu (for fermented foods)\n- prebiotic_fiber_g (fermentable fiber)\n{% if additional_compounds %}- {{additional_compounds}}{% endif %}\n\n{% if scientific_context %}Scientific context:\n{{scientific_context}}{% endif %}\n\nProvide your response as JSON with compound names as keys and values in appropriate units. Include confidence ratings (1-10) and brief reasoning for each.\n\nExample format:\n{\n  \"polyphenols_mg\": 160.5,\n  \"confidence_polyphenols_mg\": 7,\n  \"flavonoids_mg\": 45.2,\n  \"confidence_flavonoids_mg\": 6,\n  \"anthocyanins_mg\": 12.3,\n  \"confidence_anthocyanins_mg\": 8,\n  \"carotenoids_mg\": 0.8,\n  \"confidence_carotenoids_mg\": 5,\n  \"probiotics_cfu\": 0,\n  \"confidence_probiotics_cfu\": 9,\n  \"prebiotic_fiber_g\": 1.2,\n  \"confidence_prebiotic_fiber_g\": 4,\n  \"reasoning\": \"Based on research data from similar foods and processing conditions\"\n}",
+    "validation_criteria": [
+      "All requested compounds are included",
+      "Values fall within plausible ranges for the food type",
+      "Confidence ratings reflect evidence quality",
+      "Processing effects are considered",
+      "Values align with food category (e.g., berries high in anthocyanins)",
+      "Probiotics present only in fermented foods",
+      "Format matches the requested JSON structure"
+    ],
+    "known_answer_test": {
+      "food": "Blueberries, raw",
+      "known_values": {
+        "anthocyanins_mg": 163.3,
+        "polyphenols_mg": 836.0,
+        "flavonoids_mg": 180.0
+      }
+    }
+  }

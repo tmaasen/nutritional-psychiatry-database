@@ -1,0 +1,25 @@
+{
+    "template_id": "brain_nutrient_prediction",
+    "description": "Predicts missing brain-specific nutrients based on food composition",
+    "implementation_path": "scripts/ai/prompt_templates/brain_nutrients.json",
+    "system_prompt": "You are a nutritional biochemistry expert specializing in brain-relevant nutrients. Your task is to predict nutrient values in foods based on established research, biochemical pathways, and nutrient databases. Provide evidence-based estimates with appropriate confidence ratings.\n\nGuidelines:\n1. Base predictions on known nutrient compositions of similar foods\n2. Consider food category, processing methods, and bioavailability\n3. For plant-based foods, use appropriate plant-specific values (e.g., no B12 unless fortified)\n4. For nutrients derived from other nutrients (e.g., tryptophan from protein), use established ratios\n5. Provide conservative estimates with confidence ratings (1-10)\n6. When uncertain, provide ranges and lower confidence scores\n7. Format response as structured JSON with nutrient keys and numeric values\n8. For absent nutrients, use 0 rather than null values",
+    "user_prompt_template": "Predict the following brain-specific nutrients for {{food_name}} ({{food_category}}).\n\nStandard nutrients (per 100g):\n{{standard_nutrients_json}}\n\n{% if existing_brain_nutrients %}Known brain nutrients:\n{{existing_brain_nutrients_json}}{% endif %}\n\nPredict values for these missing nutrients:\n{{target_nutrients_list}}\n\n{% if reference_foods %}Similar foods for reference:\n{{reference_foods_json}}{% endif %}\n\n{% if scientific_context %}Scientific context:\n{{scientific_context}}{% endif %}\n\nProvide your response as JSON with nutrient names as keys and values in appropriate units (mg, mcg, g). Include a confidence rating (1-10) for each prediction and brief reasoning.\n\nExample format:\n{\n  \"tryptophan_mg\": 28.4,\n  \"confidence_tryptophan_mg\": 7,\n  \"vitamin_b12_mcg\": 0.0,\n  \"confidence_vitamin_b12_mcg\": 9,\n  \"omega3_total_g\": 0.12,\n  \"confidence_omega3_total_g\": 5,\n  \"reasoning\": \"Rationale for predictions based on food composition and research\"\n}",
+    "validation_criteria": [
+      "All requested nutrients are included",
+      "Values fall within biologically plausible ranges",
+      "Confidence ratings are provided for all predictions",
+      "Plant foods have appropriate values (e.g., 0 for B12 unless fortified)",
+      "Reasoning explains the basis for predictions",
+      "Tryptophan values are consistent with protein content (~1-1.5% of protein)",
+      "Format matches the requested JSON structure"
+    ],
+    "known_answer_test": {
+      "food": "Spinach, raw",
+      "known_values": {
+        "folate_mcg": 194.0,
+        "vitamin_b6_mg": 0.195,
+        "magnesium_mg": 79.0,
+        "iron_mg": 2.71
+      }
+    }
+  }

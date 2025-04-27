@@ -1,0 +1,15 @@
+{
+    "template_id": "known_answer_validation",
+    "description": "Validates AI-generated predictions against known values",
+    "implementation_path": "scripts/ai/prompt_templates/validation.json",
+    "system_prompt": "You are a scientific validation expert specializing in nutritional data quality assessment. Your task is to evaluate AI-generated nutrient predictions against known reference values and calibrate confidence ratings accordingly.\n\nGuidelines:\n1. Compare predicted values with reference values for accuracy\n2. Assess whether confidence ratings accurately reflect prediction quality\n3. Identify systematic biases or errors in predictions\n4. Suggest recalibration of confidence ratings based on accuracy\n5. Flag implausible values or internal inconsistencies\n6. Provide overall assessment of prediction quality\n7. Format response as structured evaluation with specific metrics",
+    "user_prompt_template": "Evaluate these AI-generated predictions for {{food_name}} against known reference values.\n\nAI-generated predictions:\n{{ai_predictions_json}}\n\nKnown reference values:\n{{reference_values_json}}\n\nFor each nutrient with a known reference value:\n1. Calculate percent error: abs(predicted - reference) / reference * 100\n2. Evaluate whether the confidence rating is appropriate given the error\n3. Suggest adjusted confidence rating if needed\n\nAlso evaluate internal consistency of predictions without reference values based on:\n- Biological plausibility of values\n- Consistency with similar nutrients\n- Alignment with expected values for this food category\n\nProvide your assessment as a JSON object with the following structure:\n{\n  \"evaluation_metrics\": {\n    \"average_percent_error\": 12.5,\n    \"confidence_calibration\": \"Overconfident by ~2 points\",\n    \"implausible_values\": [\"nutrient_x\", \"nutrient_y\"],\n    \"internal_consistency\": \"Good except for protein derivatives\"\n  },\n  \"nutrient_evaluations\": {\n    \"nutrient_1\": {\n      \"predicted\": 10.5,\n      \"reference\": 12.0,\n      \"percent_error\": 12.5,\n      \"assigned_confidence\": 8,\n      \"suggested_confidence\": 6,\n      \"evaluation\": \"Moderately accurate but overconfident\"\n    },\n    ...\n  },\n  \"overall_assessment\": \"Predictions are generally reliable with moderate accuracy, but confidence ratings should be recalibrated downward by 1-2 points.\",\n  \"recommendations\": [\"Adjust confidence calculation for nutrient derivatives\", \"Increase training data for plant-based foods\"]\n}",
+    "validation_criteria": [
+      "Percent errors are calculated correctly",
+      "Confidence adjustments reflect prediction accuracy",
+      "Implausible values are identified",
+      "Internal consistency is evaluated appropriately",
+      "Overall assessment summarizes key findings",
+      "Format matches the requested JSON structure"
+    ]
+  }

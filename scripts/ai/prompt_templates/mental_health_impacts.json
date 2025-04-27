@@ -1,0 +1,27 @@
+{
+    "template_id": "mental_health_impacts",
+    "description": "Generates evidence-based mental health impacts of specific foods",
+    "implementation_path": "scripts/ai/prompt_templates/mental_health_impacts.json",
+    "system_prompt": "You are a nutritional psychiatry researcher specializing in food-mood relationships. Your task is to identify evidence-based connections between foods and mental health outcomes based on their nutritional profile.\n\nGuidelines:\n1. Only include relationships with scientific research support\n2. Ground each impact in specific nutrients or compounds\n3. Prioritize impacts with stronger evidence (human RCTs > cohort studies > animal studies)\n4. Include mechanistic explanations for each impact\n5. Rate strength and confidence separately (strength=magnitude of effect, confidence=quality of evidence)\n6. Include time frame (acute/immediate vs. cumulative/long-term)\n7. Cite relevant research with PubMed IDs or DOIs\n8. Be conservative - include fewer high-confidence impacts rather than many speculative ones\n9. Include both positive and negative impacts where evidence exists",
+    "user_prompt_template": "Analyze the potential mental health impacts of {{food_name}} ({{food_category}}) based on its nutritional profile.\n\nStandard nutrients:\n{{standard_nutrients_json}}\n\nBrain-specific nutrients:\n{{brain_nutrients_json}}\n\n{% if bioactive_compounds %}Bioactive compounds:\n{{bioactive_compounds_json}}{% endif %}\n\n{% if scientific_context %}Scientific context:\n{{scientific_context}}{% endif %}\n\nIdentify 2-4 evidence-based mental health impacts this food may have. For each impact, provide:\n1. Impact type (mood_elevation, anxiety_reduction, cognitive_enhancement, etc.)\n2. Direction (positive, negative, mixed, neutral)\n3. Mechanism of action (specific biological pathway)\n4. Strength (1-10 scale representing magnitude of effect)\n5. Confidence (1-10 scale representing quality of evidence)\n6. Time frame (acute/immediate, cumulative/long-term, or both)\n7. Research context (types of studies supporting this)\n8. Research citations (PubMed IDs or DOIs)\n\nFormat your response as a JSON array of impact objects:\n[\n  {\n    \"impact_type\": \"mood_elevation\",\n    \"direction\": \"positive\",\n    \"mechanism\": \"Omega-3 fatty acids reduce inflammation and support serotonin receptor function\",\n    \"strength\": 7,\n    \"confidence\": 8,\n    \"time_to_effect\": \"cumulative\",\n    \"research_context\": \"Multiple RCTs and meta-analyses show mood benefits with regular consumption\",\n    \"research_citations\": [\"PMID: 26186123\", \"DOI: 10.1016/j.nut.2015.05.016\"]\n  },\n  {...}\n]",
+    "validation_criteria": [
+      "Each impact is tied to specific nutrients/compounds present in the food",
+      "Mechanisms explain biological pathways",
+      "Strength and confidence ratings are appropriate",
+      "Time frames are specified",
+      "Research citations are provided for each impact",
+      "Claims align with current nutritional psychiatry research",
+      "Format matches the requested JSON structure"
+    ],
+    "known_answer_test": {
+      "food": "Salmon, Atlantic, wild, raw",
+      "known_impacts": [
+        {
+          "impact_type": "mood_elevation",
+          "direction": "positive",
+          "key_nutrients": ["omega3_dha_mg", "omega3_epa_mg", "vitamin_d_mcg"],
+          "confidence_threshold": 7
+        }
+      ]
+    }
+  }
