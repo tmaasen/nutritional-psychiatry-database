@@ -1,0 +1,194 @@
+{
+    "version": "0.1.0",
+    "description": "Validation rules for Nutritional Psychiatry Dataset beyond basic schema validation",
+    "rules": [
+      {
+        "rule_id": "nutrient_plausibility",
+        "description": "Validate that nutrient values fall within biologically plausible ranges",
+        "constraints": [
+          {
+            "field": "standard_nutrients.calories",
+            "condition": "range",
+            "min": 0,
+            "max": 900,
+            "unit": "kcal/100g",
+            "message": "Calories exceed plausible range for natural foods"
+          },
+          {
+            "field": "standard_nutrients.protein_g",
+            "condition": "range",
+            "min": 0,
+            "max": 100,
+            "unit": "g/100g",
+            "message": "Protein content exceeds plausible range"
+          },
+          {
+            "field": "brain_nutrients.tryptophan_mg",
+            "condition": "range",
+            "min": 0,
+            "max": 2000,
+            "unit": "mg/100g",
+            "message": "Tryptophan content exceeds plausible range"
+          },
+          {
+            "field": "brain_nutrients.omega3.total_g",
+            "condition": "range",
+            "min": 0,
+            "max": 30,
+            "unit": "g/100g",
+            "message": "Omega-3 content exceeds plausible range"
+          }
+        ]
+      },
+      {
+        "rule_id": "nutrient_relationships",
+        "description": "Validate relationships between nutrients",
+        "constraints": [
+          {
+            "fields": ["standard_nutrients.protein_g", "brain_nutrients.tryptophan_mg"],
+            "condition": "proportion",
+            "min_ratio": 0.005,
+            "max_ratio": 0.02,
+            "message": "Tryptophan should be approximately 0.5-2% of total protein"
+          },
+          {
+            "fields": ["brain_nutrients.omega3.total_g", "brain_nutrients.omega3.epa_mg", "brain_nutrients.omega3.dha_mg", "brain_nutrients.omega3.ala_mg"],
+            "condition": "sum_components",
+            "tolerance": 0.2,
+            "message": "Sum of EPA, DHA, and ALA should approximate total omega-3 content"
+          }
+        ]
+      },
+      {
+        "rule_id": "mental_health_impact_evidence",
+        "description": "Validate evidence requirements for mental health impacts",
+        "constraints": [
+          {
+            "field": "mental_health_impacts[].research_support",
+            "condition": "min_items",
+            "min": 1,
+            "message": "Mental health impacts must have at least one supporting research citation"
+          },
+          {
+            "fields": ["mental_health_impacts[].strength", "mental_health_impacts[].confidence"],
+            "condition": "conditional",
+            "rule": "if strength > 7 then confidence >= 6",
+            "message": "High strength impacts (>7) require high confidence (≥6)"
+          }
+        ]
+      },
+      {
+        "rule_id": "inflammation_index_citation",
+        "description": "Validate that inflammatory indices have scientific backing",
+        "constraints": [
+          {
+            "field": "inflammatory_index.citations",
+            "condition": "min_items",
+            "min": 1,
+            "message": "Inflammatory index must cite at least one scientific source"
+          }
+        ]
+      },
+      {
+        "rule_id": "source_prioritization",
+        "description": "Validate source prioritization according to research standards",
+        "constraints": [
+          {
+            "field": "data_quality.brain_nutrients_source",
+            "condition": "match",
+            "options": ["usda_provided", "openfoodfacts", "literature_derived", "ai_generated", "expert_estimated"],
+            "priority": ["literature_derived", "usda_provided", "openfoodfacts", "expert_estimated", "ai_generated"],
+            "message": "Literature-derived data should be prioritized for brain nutrients when available"
+          }
+        ]
+      },
+      {
+        "rule_id": "confidence_thresholds",
+        "description": "Validate confidence ratings for different data elements",
+        "constraints": [
+          {
+            "field": "mental_health_impacts[].confidence",
+            "condition": "min_value",
+            "source": "literature_derived",
+            "min": 5,
+            "message": "Literature-derived mental health impacts should have confidence rating ≥5"
+          },
+          {
+            "field": "mental_health_impacts[].confidence",
+            "condition": "min_value",
+            "source": "ai_generated",
+            "min": 7,
+            "message": "AI-generated mental health impacts should have confidence rating ≥7"
+          }
+        ]
+      },
+      {
+        "rule_id": "dietary_pattern_validation",
+        "description": "Validate dietary pattern classifications according to research",
+        "constraints": [
+          {
+            "field": "dietary_patterns[].pattern_name",
+            "condition": "match",
+            "options": ["mediterranean", "western", "dash", "mind", "vegetarian", "vegan", "ketogenic", "low_fodmap"],
+            "message": "Dietary pattern must be a recognized pattern in nutritional psychiatry research"
+          },
+          {
+            "field": "dietary_patterns[].mental_health_relevance",
+            "condition": "required_if",
+            "dependent_field": "dietary_patterns[].pattern_name",
+            "dependent_values": ["mediterranean", "mind"],
+            "message": "Mental health relevance is required for Mediterranean and MIND diets due to strong research evidence"
+          }
+        ]
+      },
+      {
+        "rule_id": "neural_targets_validation",
+        "description": "Validate neural pathway targets according to research",
+        "constraints": [
+          {
+            "field": "neural_targets[].pathway",
+            "condition": "match",
+            "options": ["bdnf_signaling", "neuroinflammation", "oxidative_stress", "neuroplasticity", "serotonin_synthesis", "dopamine_regulation", "gaba_function", "glutamate_function", "hpa_axis", "gut_brain_axis"],
+            "message": "Neural pathway must be a recognized mechanism in nutritional psychiatry research"
+          },
+          {
+            "field": "neural_targets[].confidence",
+            "condition": "min_value",
+            "min": 6,
+            "message": "Neural pathway targeting requires high confidence (≥6) due to complex mechanisms"
+          }
+        ]
+      }
+    ],
+    "derived_fields": [
+      {
+        "field": "calculated_inflammatory_potential",
+        "derived_from": ["standard_nutrients.fat_g", "standard_nutrients.fiber_g", "bioactive_compounds.polyphenols_mg"],
+        "formula": "0.5*fat_g - 0.3*fiber_g - 0.2*(polyphenols_mg/100)",
+        "description": "Simple calculation of inflammatory potential based on key nutrients"
+      },
+      {
+        "field": "brain_nutrient_completeness",
+        "derived_from": ["brain_nutrients"],
+        "formula": "count_non_null_fields(brain_nutrients) / total_brain_nutrient_fields",
+        "description": "Fraction of brain nutrient fields with valid data"
+      }
+    ],
+    "references": [
+      {
+        "id": "marx2021",
+        "citation": "Marx, W., et al. (2021). Nutritional Psychiatry: The present state of the evidence. Proceedings of the Nutrition Society, 80(1), 59-67.",
+        "doi": "10.1017/S0029665120007119"
+      },
+      {
+        "id": "firth2019",
+        "citation": "Firth, J., et al. (2019). Food and mood: how do diet and nutrition affect mental wellbeing? BMJ, 369:m2382",
+        "doi": "10.1136/bmj.m2382"
+      },
+      {
+        "id": "jacka2017",
+        "citation": "Jacka, F.N., et al. (2017). A randomised controlled trial of dietary improvement for adults with major depression (the 'SMILES' trial). BMC Medicine, 15, 23.",
+        "doi": "10.1186/s12916-017-0791-y"
+      }
+    ]
+  }
