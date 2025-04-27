@@ -260,10 +260,9 @@ The methodology follows strict ethical guidelines:
 The enriched dataset is intended for:
 
 1. Research and education in nutritional psychiatry
-2. Development of food tracking applications like Swell
-3. Generation of testable hypotheses for future research
-4. Public education on nutrition and mental health
-5. Supporting holistic health approaches
+2. Generation of testable hypotheses for future research
+3. Public education on nutrition and mental health
+4. Supporting holistic health approaches
 
 The dataset is **not** intended for:
 1. Medical diagnosis or treatment planning
