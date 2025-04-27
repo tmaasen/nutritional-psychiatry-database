@@ -2,6 +2,105 @@
 
 This document provides detailed descriptions of all fields in the Nutritional Psychiatry Dataset schema. It serves as a reference for understanding the data structure, field meanings, units of measurement, and data types.
 
+```mermaid
+classDiagram
+    class FoodData {
+        +String food_id
+        +String name
+        +String description
+        +String category
+        +ServingInfo serving_info
+        +StandardNutrients standard_nutrients
+        +BrainNutrients brain_nutrients
+        +BioactiveCompounds bioactive_compounds
+        +List~MentalHealthImpact~ mental_health_impacts
+        +NutrientInteractions nutrient_interactions
+        +ContextualFactors contextual_factors
+        +InflammatoryIndex inflammatory_index
+        +DataQuality data_quality
+        +Metadata metadata
+    }
+    
+    class ServingInfo {
+        +Number serving_size
+        +String serving_unit
+        +String household_serving
+    }
+    
+    class StandardNutrients {
+        +Number calories
+        +Number protein_g
+        +Number carbohydrates_g
+        +Number fat_g
+        +Number fiber_g
+        +Number sugars_g
+        ...
+    }
+    
+    class BrainNutrients {
+        +Number tryptophan_mg
+        +Number tyrosine_mg
+        +Number vitamin_b6_mg
+        +Number folate_mcg
+        +Number vitamin_b12_mcg
+        +Omega3 omega3
+        ...
+    }
+    
+    class Omega3 {
+        +Number total_g
+        +Number epa_mg
+        +Number dha_mg
+        +Number ala_mg
+        +Number confidence
+    }
+    
+    class BioactiveCompounds {
+        +Number polyphenols_mg
+        +Number flavonoids_mg
+        +Number anthocyanins_mg
+        +Number carotenoids_mg
+        +Number probiotics_cfu
+        +Number prebiotic_fiber_g
+    }
+    
+    class MentalHealthImpact {
+        +String impact_type
+        +String direction
+        +String mechanism
+        +Number strength
+        +Number confidence
+        +String time_to_effect
+        +String research_context
+        +List~ResearchCitation~ research_support
+    }
+    
+    class DataQuality {
+        +Number completeness
+        +Number overall_confidence
+        +String brain_nutrients_source
+        +String impacts_source
+        +SourcePriority source_priority
+    }
+    
+    class Metadata {
+        +String version
+        +DateTime created
+        +DateTime last_updated
+        +List~String~ source_urls
+        +List~String~ tags
+    }
+    
+    FoodData *-- ServingInfo
+    FoodData *-- StandardNutrients
+    FoodData *-- BrainNutrients
+    FoodData *-- BioactiveCompounds
+    FoodData *-- MentalHealthImpact
+    FoodData *-- DataQuality
+    FoodData *-- Metadata
+    BrainNutrients *-- Omega3
+```
+
 ## Basic Food Information
 
 | Field | Description | Type | Example | Notes |

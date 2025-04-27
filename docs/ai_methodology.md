@@ -26,6 +26,55 @@ Our AI methodology addresses these gaps through four key enrichment processes:
 
 ## 3. AI Enrichment Pipeline Architecture
 
+```mermaid
+flowchart TD
+    %% Input Data
+    BASE[Base Food Data with Gaps]
+    
+    %% Enrichment Components
+    TEMPLATE[Load Prompt Template]
+    API[OpenAI API Client]
+    PARSE[Parse & Validate Response]
+    
+    %% Enrichment Types
+    subgraph "Enrichment Tasks"
+        BRAIN[Brain Nutrient\nPrediction]
+        BIO[Bioactive Compound\nPrediction]
+        IMPACT[Mental Health Impact\nGeneration]
+        INTERACT[Nutrient Interaction\nIdentification]
+    end
+    
+    %% Quality Control
+    VALIDATE[Known-Answer Testing]
+    CALIBRATE[Confidence Calibration]
+    
+    %% Output
+    ENRICHED[Enriched Food Data]
+    
+    %% Flow
+    BASE --> BRAIN & BIO & IMPACT & INTERACT
+    
+    BRAIN & BIO & IMPACT & INTERACT --> TEMPLATE
+    TEMPLATE --> API
+    API --> PARSE
+    PARSE --> VALIDATE
+    VALIDATE --> CALIBRATE
+    CALIBRATE --> ENRICHED
+    
+    %% Styling
+    classDef input fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef task fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef process fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef qc fill:#ffe6cc,stroke:#333,stroke-width:2px
+    classDef output fill:#dae8fc,stroke:#333,stroke-width:2px
+    
+    class BASE input
+    class BRAIN,BIO,IMPACT,INTERACT task
+    class TEMPLATE,API,PARSE process
+    class VALIDATE,CALIBRATE qc
+    class ENRICHED output
+```
+
 The enrichment pipeline follows a structured process:
 
 1. **Data preparation**: Food records from USDA and OpenFoodFacts are transformed to our schema

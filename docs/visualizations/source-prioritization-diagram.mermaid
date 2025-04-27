@@ -1,0 +1,64 @@
+flowchart TB
+    %% Input Sources
+    USDA[USDA Data]
+    OFF[OpenFoodFacts Data]
+    LIT[Literature-Derived Data]
+    AI[AI-Generated Data]
+    
+    %% Prioritization Process
+    MERGE[Source Prioritization\nProcess]
+    
+    %% Priority Flows
+    subgraph "Standard Nutrients Priority"
+        SN_USDA[1. USDA]
+        SN_OFF[2. OpenFoodFacts]
+        SN_LIT[3. Literature]
+        SN_AI[4. AI-Generated]
+    end
+    
+    subgraph "Brain Nutrients Priority"
+        BN_LIT[1. Literature]
+        BN_USDA[2. USDA]
+        BN_OFF[3. OpenFoodFacts]
+        BN_AI[4. AI-Generated]
+    end
+    
+    subgraph "Mental Health Impacts Priority"
+        MH_LIT[1. Literature]
+        MH_AI[2. AI-Generated with Citations]
+    end
+    
+    %% Merger Logic
+    COMPONENT[Component-Level Merger]
+    FIELD[Field-By-Field Selection]
+    CONFLICT[Conflict Resolution]
+    CONFIDENCE[Confidence Tracking]
+    
+    %% Output
+    MERGED[Merged Food Entry\nwith Source Tracking]
+    
+    %% Connections
+    USDA & OFF & LIT & AI --> MERGE
+    
+    MERGE --> SN_USDA --> SN_OFF --> SN_LIT --> SN_AI
+    MERGE --> BN_LIT --> BN_USDA --> BN_OFF --> BN_AI
+    MERGE --> MH_LIT --> MH_AI
+    
+    SN_AI & BN_AI & MH_AI --> COMPONENT
+    COMPONENT --> FIELD
+    FIELD --> CONFLICT
+    CONFLICT --> CONFIDENCE
+    CONFIDENCE --> MERGED
+    
+    %% Styling
+    classDef sources fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef process fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef priority fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef merge fill:#ffe6cc,stroke:#333,stroke-width:2px
+    classDef output fill:#dae8fc,stroke:#333,stroke-width:2px
+    
+    class USDA,OFF,LIT,AI sources
+    class MERGE process
+    class SN_USDA,SN_OFF,SN_LIT,SN_AI,BN_LIT,BN_USDA,BN_OFF,BN_AI,MH_LIT,MH_AI priority
+    class COMPONENT,FIELD,CONFLICT,CONFIDENCE merge
+    class MERGED output

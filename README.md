@@ -72,22 +72,7 @@ The dataset follows a comprehensive schema that includes:
 
 ## Project Structure
 
-```
-nutritional-psychiatry-dataset/
-├── README.md                       # Project overview and documentation
-├── LICENSE                         # MIT license
-├── CONTRIBUTING.md                 # Guidelines for contributors
-├── schema/                         # JSON Schema definitions
-├── scripts/                        # Data processing scripts
-│   ├── data_collection/            # Scripts for gathering raw data
-│   ├── data_processing/            # Scripts for transforming data
-│   └── ai/                         # AI enrichment scripts
-├── data/                           # The actual dataset
-│   ├── raw/                        # Original USDA data
-│   ├── processed/                  # Transformed data
-│   └── enriched/                   # Final enriched dataset
-└── docs/                           # Extended documentation
-```
+Please see [project-structure.md](/project-structure.md)
 
 ## Data Sources
 
@@ -150,7 +135,7 @@ python scripts/data_processing/transform.py
 #### Enriching with AI
 
 ```bash
-python scripts/ai/enrich.py --limit 5  # Process 5 foods
+python scripts/data_processing/enrichment.py --limit 5  # Process 5 foods
 ```
 
 ## Roadmap
@@ -187,6 +172,57 @@ We especially welcome:
 
 ## Scientific Validation
 
+```mermaid
+flowchart TD
+    %% Input
+    FOOD[Food Data Entry]
+    
+    %% Schema Validation
+    SCHEMA[Schema Validation]
+    
+    %% Validation Types
+    subgraph "Validation Rules"
+        NUTRIENT_PLAUS[Nutrient Plausibility\nChecks]
+        NUTRIENT_REL[Nutrient Relationship\nChecks]
+        IMPACT_EVIDENCE[Mental Health Impact\nEvidence Checks]
+        CITATIONS[Citation\nRequirements]
+        CONFIDENCE[Confidence Rating\nCalibration]
+    end
+    
+    %% Known-Answer Testing
+    KNOWN[Known-Answer Testing]
+    
+    %% Output Branches
+    PASS[Validation Passed]
+    ADJUST[Needs Adjustment]
+    REJECT[Validation Failed]
+    
+    %% Flow
+    FOOD --> SCHEMA
+    
+    SCHEMA -- Valid Schema --> NUTRIENT_PLAUS & NUTRIENT_REL & IMPACT_EVIDENCE & CITATIONS & CONFIDENCE
+    SCHEMA -- Invalid Schema --> REJECT
+    
+    NUTRIENT_PLAUS & NUTRIENT_REL & IMPACT_EVIDENCE & CITATIONS & CONFIDENCE --> KNOWN
+    
+    KNOWN -- All Tests Pass --> PASS
+    KNOWN -- Minor Issues --> ADJUST
+    KNOWN -- Major Issues --> REJECT
+    
+    ADJUST --> CONFIDENCE
+    
+    %% Styling
+    classDef input fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef validation fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef rules fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef output fill:#ffe6cc,stroke:#333,stroke-width:2px
+    
+    class FOOD input
+    class SCHEMA,KNOWN validation
+    class NUTRIENT_PLAUS,NUTRIENT_REL,IMPACT_EVIDENCE,CITATIONS,CONFIDENCE rules
+    class PASS,ADJUST,REJECT output
+```
+
 This dataset is being developed with scientific rigor in mind:
 
 - All AI-generated data is clearly marked and confidence-scored
@@ -206,7 +242,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-- Project Lead: [Your Name](mailto:your.email@example.com)
 - GitHub Issues: For bug reports and feature requests
 
 ---

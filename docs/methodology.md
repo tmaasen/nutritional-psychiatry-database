@@ -89,14 +89,47 @@ All AI-generated data is clearly marked and includes confidence ratings.
 
 ## Detailed Methodology by Component
 
-### 1. USDA Data Collection
+### 1. Data Collection
 
-```python
-# Key steps in our USDA collection script
-def fetch_usda_data(food_id):
-    # Fetch food details from FDC API
-    # Extract nutrients and metadata
-    # Save raw data for reproducibility
+```mermaid
+flowchart TD
+    %% Data Collection Sources
+    USDA[USDA FoodData Central API]
+    OFF[OpenFoodFacts API]
+    LIT[Scientific Literature]
+    MAN[Manual Entry]
+    
+    %% Collection Scripts
+    USDA_SCRIPT[usda-api.py]
+    OFF_SCRIPT[openfoodfacts-api.py]
+    LIT_SCRIPT[literature-extract.py]
+    MAN_SCRIPT[manual-entry-tool]
+    
+    %% Raw Data
+    RAW_USDA[raw/usda_foods/*.json]
+    RAW_OFF[raw/openfoodfacts/*.json]
+    RAW_LIT[raw/literature/*.json]
+    RAW_MAN[raw/manual_entries/*.json]
+    
+    %% Connections
+    USDA --> USDA_SCRIPT
+    OFF --> OFF_SCRIPT
+    LIT --> LIT_SCRIPT
+    MAN --> MAN_SCRIPT
+    
+    USDA_SCRIPT --> RAW_USDA
+    OFF_SCRIPT --> RAW_OFF
+    LIT_SCRIPT --> RAW_LIT
+    MAN_SCRIPT --> RAW_MAN
+    
+    %% Styling
+    classDef sources fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef scripts fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef data fill:#d5e8d4,stroke:#333,stroke-width:2px
+    
+    class USDA,OFF,LIT,MAN sources
+    class USDA_SCRIPT,OFF_SCRIPT,LIT_SCRIPT,MAN_SCRIPT scripts
+    class RAW_USDA,RAW_OFF,RAW_LIT,RAW_MAN data
 ```
 
 We collect:
@@ -106,6 +139,73 @@ We collect:
 - Metadata on analytical methods and sample origins
 
 ### 2. Schema Transformation
+
+```mermaid
+flowchart TB
+    %% Input Sources
+    USDA[USDA Data]
+    OFF[OpenFoodFacts Data]
+    LIT[Literature-Derived Data]
+    AI[AI-Generated Data]
+    
+    %% Prioritization Process
+    MERGE[Source Prioritization\nProcess]
+    
+    %% Priority Flows
+    subgraph "Standard Nutrients Priority"
+        SN_USDA[1. USDA]
+        SN_OFF[2. OpenFoodFacts]
+        SN_LIT[3. Literature]
+        SN_AI[4. AI-Generated]
+    end
+    
+    subgraph "Brain Nutrients Priority"
+        BN_LIT[1. Literature]
+        BN_USDA[2. USDA]
+        BN_OFF[3. OpenFoodFacts]
+        BN_AI[4. AI-Generated]
+    end
+    
+    subgraph "Mental Health Impacts Priority"
+        MH_LIT[1. Literature]
+        MH_AI[2. AI-Generated with Citations]
+    end
+    
+    %% Merger Logic
+    COMPONENT[Component-Level Merger]
+    FIELD[Field-By-Field Selection]
+    CONFLICT[Conflict Resolution]
+    CONFIDENCE[Confidence Tracking]
+    
+    %% Output
+    MERGED[Merged Food Entry\nwith Source Tracking]
+    
+    %% Connections
+    USDA & OFF & LIT & AI --> MERGE
+    
+    MERGE --> SN_USDA --> SN_OFF --> SN_LIT --> SN_AI
+    MERGE --> BN_LIT --> BN_USDA --> BN_OFF --> BN_AI
+    MERGE --> MH_LIT --> MH_AI
+    
+    SN_AI & BN_AI & MH_AI --> COMPONENT
+    COMPONENT --> FIELD
+    FIELD --> CONFLICT
+    CONFLICT --> CONFIDENCE
+    CONFIDENCE --> MERGED
+    
+    %% Styling
+    classDef sources fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef process fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef priority fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef merge fill:#ffe6cc,stroke:#333,stroke-width:2px
+    classDef output fill:#dae8fc,stroke:#333,stroke-width:2px
+    
+    class USDA,OFF,LIT,AI sources
+    class MERGE process
+    class SN_USDA,SN_OFF,SN_LIT,SN_AI,BN_LIT,BN_USDA,BN_OFF,BN_AI,MH_LIT,MH_AI priority
+    class COMPONENT,FIELD,CONFLICT,CONFIDENCE merge
+    class MERGED output
+```
 
 ```python
 # Key steps in our transformation script

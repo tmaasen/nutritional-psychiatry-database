@@ -1,0 +1,39 @@
+flowchart LR
+    %% Input Data
+    RAW[Raw Data\nMultiple Sources]
+    
+    %% Processing Steps
+    TRANSFORM[transform.py\nSchema Conversion]
+    GAP[Gap Analysis\nIdentify Missing Data]
+    VALIDATE[validation.py\nInitial Validation]
+    
+    %% Output Data
+    PROCESSED[processed/base_foods/*.json\nBase Schema Format]
+    
+    %% Flow
+    RAW --> TRANSFORM
+    TRANSFORM --> VALIDATE
+    VALIDATE --> PROCESSED
+    PROCESSED --> GAP
+    
+    %% Gap Analysis Details
+    subgraph "Gap Analysis Process"
+        BRAIN_GAP[Missing Brain Nutrients]
+        BIO_GAP[Missing Bioactive Compounds]
+        IMPACT_GAP[Missing Mental Health Impacts]
+    end
+    
+    GAP --> BRAIN_GAP
+    GAP --> BIO_GAP
+    GAP --> IMPACT_GAP
+    
+    %% Styling
+    classDef input fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef process fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef output fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef gap fill:#ffe6cc,stroke:#333,stroke-width:2px
+    
+    class RAW input
+    class TRANSFORM,VALIDATE,GAP process
+    class PROCESSED output
+    class BRAIN_GAP,BIO_GAP,IMPACT_GAP gap

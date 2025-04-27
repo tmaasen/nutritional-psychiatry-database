@@ -1,0 +1,48 @@
+flowchart TD
+    %% Input
+    FOOD[Food Data Entry]
+    
+    %% Schema Validation
+    SCHEMA[Schema Validation]
+    
+    %% Validation Types
+    subgraph "Validation Rules"
+        NUTRIENT_PLAUS[Nutrient Plausibility\nChecks]
+        NUTRIENT_REL[Nutrient Relationship\nChecks]
+        IMPACT_EVIDENCE[Mental Health Impact\nEvidence Checks]
+        CITATIONS[Citation\nRequirements]
+        CONFIDENCE[Confidence Rating\nCalibration]
+    end
+    
+    %% Known-Answer Testing
+    KNOWN[Known-Answer Testing]
+    
+    %% Output Branches
+    PASS[Validation Passed]
+    ADJUST[Needs Adjustment]
+    REJECT[Validation Failed]
+    
+    %% Flow
+    FOOD --> SCHEMA
+    
+    SCHEMA -- Valid Schema --> NUTRIENT_PLAUS & NUTRIENT_REL & IMPACT_EVIDENCE & CITATIONS & CONFIDENCE
+    SCHEMA -- Invalid Schema --> REJECT
+    
+    NUTRIENT_PLAUS & NUTRIENT_REL & IMPACT_EVIDENCE & CITATIONS & CONFIDENCE --> KNOWN
+    
+    KNOWN -- All Tests Pass --> PASS
+    KNOWN -- Minor Issues --> ADJUST
+    KNOWN -- Major Issues --> REJECT
+    
+    ADJUST --> CONFIDENCE
+    
+    %% Styling
+    classDef input fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef validation fill:#fff2cc,stroke:#333,stroke-width:2px
+    classDef rules fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef output fill:#ffe6cc,stroke:#333,stroke-width:2px
+    
+    class FOOD input
+    class SCHEMA,KNOWN validation
+    class NUTRIENT_PLAUS,NUTRIENT_REL,IMPACT_EVIDENCE,CITATIONS,CONFIDENCE rules
+    class PASS,ADJUST,REJECT output
