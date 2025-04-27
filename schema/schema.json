@@ -318,6 +318,322 @@
         }
       }
     },
+    
+    "nutrient_interactions": {
+      "type": "array",
+      "description": "Interactions between nutrients affecting mental health",
+      "items": {
+        "type": "object",
+        "required": ["interaction_id", "nutrients_involved", "interaction_type", "mechanism", "confidence"],
+        "properties": {
+          "interaction_id": {
+            "type": "string",
+            "description": "Unique identifier for this interaction"
+          },
+          "nutrients_involved": {
+            "type": "array",
+            "description": "List of nutrients involved in this interaction",
+            "items": {
+              "type": "string"
+            }
+          },
+          "interaction_type": {
+            "type": "string",
+            "description": "Type of interaction",
+            "enum": ["synergistic", "antagonistic", "required_cofactor", "protective", "inhibitory"]
+          },
+          "pathway": {
+            "type": "string",
+            "description": "Biochemical pathway affected"
+          },
+          "mechanism": {
+            "type": "string",
+            "description": "Detailed mechanism of action"
+          },
+          "mental_health_relevance": {
+            "type": "string",
+            "description": "How this interaction affects mental health"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence in this interaction (1-10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "research_support": {
+            "type": "array",
+            "description": "Supporting research",
+            "items": {
+              "type": "object",
+              "properties": {
+                "citation": {
+                  "type": "string",
+                  "description": "Citation information"
+                },
+                "study_type": {
+                  "type": "string",
+                  "description": "Type of study"
+                }
+              }
+            }
+          },
+          "foods_demonstrating": {
+            "type": "array",
+            "description": "Foods that demonstrate this interaction",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    
+    "contextual_factors": {
+      "type": "object",
+      "description": "Contextual factors affecting nutrient impact",
+      "properties": {
+        "circadian_effects": {
+          "type": "object",
+          "description": "Effects related to time of consumption",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "factors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "factor": {
+                    "type": "string"
+                  },
+                  "effects": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "relevant_to": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "citations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "food_combinations": {
+          "type": "array",
+          "description": "Effects of combining with other foods",
+          "items": {
+            "type": "object",
+            "properties": {
+              "combination": {
+                "type": "string"
+              },
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "relevant_to": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10
+              }
+            }
+          }
+        },
+        "preparation_effects": {
+          "type": "array",
+          "description": "Effects of food preparation methods",
+          "items": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "relevant_to": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "population_variations": {
+      "type": "array",
+      "description": "Variations in response by different populations",
+      "items": {
+        "type": "object",
+        "properties": {
+          "population": {
+            "type": "string",
+            "description": "Population identifier"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the population"
+          },
+          "variations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nutrient": {
+                  "type": "string"
+                },
+                "effect": {
+                  "type": "string"
+                },
+                "mechanism": {
+                  "type": "string"
+                },
+                "impact_modifier": {
+                  "type": "number",
+                  "description": "Multiplier for effect strength"
+                },
+                "recommendations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 10
+                },
+                "citations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "dietary_patterns": {
+      "type": "array",
+      "description": "Whole dietary patterns this food contributes to",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern_name": {
+            "type": "string",
+            "description": "Name of dietary pattern",
+            "enum": ["mediterranean", "western", "dash", "mind", "vegetarian", "vegan", "ketogenic", "low_fodmap"]
+          },
+          "pattern_contribution": {
+            "type": "string",
+            "description": "How this food contributes to the pattern",
+            "enum": ["key_component", "supportive", "occasional", "limited", "avoided"]
+          },
+          "mental_health_relevance": {
+            "type": "string",
+            "description": "How this food's role in the pattern affects mental health"
+          }
+        }
+      }
+    },
+    
+    "inflammatory_index": {
+      "type": "object",
+      "description": "Food's inflammatory potential",
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Inflammatory index (-10 anti-inflammatory to +10 pro-inflammatory)"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "calculation_method": {
+          "type": "string",
+          "enum": ["dietary_inflammatory_index", "empirical_dietary_index", "expert_estimate"]
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    
+    "neural_targets": {
+      "type": "array",
+      "description": "Neural pathways affected by food components",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pathway": {
+            "type": "string",
+            "description": "Neural pathway affected"
+          },
+          "effect": {
+            "type": "string",
+            "enum": ["upregulation", "downregulation", "modulation", "protection"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "mechanisms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mental_health_relevance": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    
     "data_quality": {
       "type": "object",
       "description": "Data quality metrics",
@@ -337,12 +653,30 @@
         "brain_nutrients_source": {
           "type": "string",
           "description": "Source of brain nutrient data",
-          "enum": ["usda_provided", "literature_derived", "ai_generated", "expert_estimated"]
+          "enum": ["usda_provided", "openfoodfacts", "literature_derived", "ai_generated", "expert_estimated"]
         },
         "impacts_source": {
           "type": "string",
           "description": "Source of mental health impact data",
           "enum": ["direct_studies", "literature_review", "mechanism_inference", "ai_generated"]
+        },
+        "source_priority": {
+          "type": "object",
+          "description": "Which source was prioritized for different data sections",
+          "properties": {
+            "standard_nutrients": {
+              "type": "string",
+              "enum": ["usda", "openfoodfacts", "literature", "ai_generated"]
+            },
+            "brain_nutrients": {
+              "type": "string",
+              "enum": ["usda", "openfoodfacts", "literature", "ai_generated"]
+            },
+            "bioactive_compounds": {
+              "type": "string",
+              "enum": ["usda", "openfoodfacts", "literature", "ai_generated"]
+            }
+          }
         }
       }
     },
@@ -369,6 +703,18 @@
           "description": "URLs to data sources",
           "items": {
             "type": "string"
+          }
+        },
+        "source_ids": {
+          "type": "object",
+          "description": "IDs in original databases",
+          "properties": {
+            "usda_fdc_id": {
+              "type": "string"
+            },
+            "openfoodfacts_id": {
+              "type": "string"
+            }
           }
         },
         "image_url": {

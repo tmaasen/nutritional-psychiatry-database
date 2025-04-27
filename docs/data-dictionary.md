@@ -42,6 +42,119 @@ All values per 100g of food unless otherwise specified.
 | `standard_nutrients.vitamin_c_mg` | Vitamin C | Number | mg | |
 | `standard_nutrients.vitamin_a_iu` | Vitamin A | Number | IU | International Units |
 
+## Nutrient Interactions
+
+Interactions between nutrients affecting mental health outcomes.
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `interaction_id` | Unique identifier | String | e.g., "int_001" |
+| `nutrients_involved` | List of interacting nutrients | Array | References to nutrient fields |
+| `interaction_type` | Type of interaction | String | synergistic, antagonistic, required_cofactor, protective, inhibitory |
+| `pathway` | Biochemical pathway affected | String | e.g., "serotonin_synthesis" |
+| `mechanism` | Mechanism of action | String | Detailed explanation of interaction |
+| `mental_health_relevance` | Relevance to mental health | String | How this interaction affects mental function |
+| `confidence` | Confidence rating | Number | 1-10 scale |
+| `research_support` | Supporting research | Array | Citations for interaction |
+| `foods_demonstrating` | Foods showing this interaction | Array | Food IDs demonstrating interaction |
+
+## Contextual Factors
+
+Factors that affect how nutrients impact mental health based on context.
+
+### Circadian Effects
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `circadian_effects.description` | General description | String | Overview of time effects |
+| `circadian_effects.factors[].factor` | Specific timing factor | String | e.g., "morning_consumption" |
+| `circadian_effects.factors[].effects` | Effects of this timing | Array | List of effects |
+| `circadian_effects.factors[].relevant_to` | Affected nutrients | Array | Nutrients affected by timing |
+| `circadian_effects.factors[].confidence` | Confidence rating | Number | 1-10 scale |
+| `circadian_effects.factors[].citations` | Supporting research | Array | Citations |
+
+### Food Combinations
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `food_combinations[].combination` | Combination type | String | e.g., "with_fat" |
+| `food_combinations[].effects` | Effects of combination | Array | List of effects |
+| `food_combinations[].relevant_to` | Affected nutrients | Array | Nutrients affected |
+| `food_combinations[].confidence` | Confidence rating | Number | 1-10 scale |
+
+### Preparation Effects
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `preparation_effects[].method` | Preparation method | String | e.g., "fermentation" |
+| `preparation_effects[].effects` | Effects of method | Array | List of effects |
+| `preparation_effects[].relevant_to` | Affected nutrients | Array | Nutrients affected |
+| `preparation_effects[].confidence` | Confidence rating | Number | 1-10 scale |
+
+## Population Variations
+
+Differences in response across different populations.
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `population` | Target population | String | e.g., "older_adults" |
+| `description` | Population description | String | Details about the population |
+| `variations[].nutrient` | Affected nutrient | String | Nutrient field name |
+| `variations[].effect` | Effect type | String | e.g., "reduced_absorption" |
+| `variations[].mechanism` | Mechanism of variation | String | How the variation occurs |
+| `variations[].impact_modifier` | Effect modifier | Number | Multiplier for effect strength |
+| `variations[].recommendations` | Recommendations | Array | Advice for this population |
+| `variations[].confidence` | Confidence rating | Number | 1-10 scale |
+| `variations[].citations` | Supporting research | Array | Citations |
+
+## Dietary Patterns
+
+Information on whole dietary patterns this food contributes to.
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `pattern_name` | Name of dietary pattern | String | mediterranean, western, dash, mind, etc. |
+| `pattern_contribution` | Food's role in pattern | String | key_component, supportive, occasional, limited, avoided |
+| `mental_health_relevance` | Mental health relevance | String | How this role affects mental health |
+
+## Inflammatory Index
+
+Food's inflammatory potential.
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `value` | Inflammatory index value | Number | -10 (anti-inflammatory) to +10 (pro-inflammatory) |
+| `confidence` | Confidence rating | Number | 1-10 scale |
+| `calculation_method` | Method used | String | dietary_inflammatory_index, empirical_dietary_index, expert_estimate |
+| `citations` | Supporting research | Array | Research citations |
+
+## Neural Targets
+
+Neural pathways affected by food components.
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `pathway` | Neural pathway affected | String | e.g., "bdnf_signaling" |
+| `effect` | Type of effect | String | upregulation, downregulation, modulation, protection |
+| `confidence` | Confidence rating | Number | 1-10 scale |
+| `mechanisms` | Mechanism descriptions | Array | How the effect occurs |
+| `mental_health_relevance` | Relevance to mental health | String | Clinical significance |
+
+## Data Quality Metrics (Extended)
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `source_priority.standard_nutrients` | Source used for standard nutrients | String | usda, openfoodfacts, literature, ai_generated |
+| `source_priority.brain_nutrients` | Source used for brain nutrients | String | usda, openfoodfacts, literature, ai_generated |
+| `source_priority.bioactive_compounds` | Source used for bioactive compounds | String | usda, openfoodfacts, literature, ai_generated |
+
+## Metadata (Extended)
+
+| Field | Description | Type | Notes |
+|-------|-------------|------|-------|
+| `source_ids.usda_fdc_id` | USDA FDC ID | String | Original USDA identifier |
+| `source_ids.openfoodfacts_id` | OpenFoodFacts ID | String | Original OpenFoodFacts barcode |
+
 ## Brain-Specific Nutrients
 
 All values per 100g of food unless otherwise specified.

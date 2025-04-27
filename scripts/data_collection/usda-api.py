@@ -2,6 +2,13 @@
 """
 USDA FoodData Central API Integration
 This script interfaces with the USDA FoodData Central API to retrieve food data.
+
+This script assumes:
+- You have registered for a USDA FoodData Central API key
+- The API key is set as an environment variable or provided as an argument
+- Internet connectivity to access the USDA API
+- Data is saved to `data/raw/usda_foods/` by default
+- A predefined list of foods is queried based on nutritional psychiatry relevance
 """
 
 import os

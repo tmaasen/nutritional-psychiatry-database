@@ -14,7 +14,47 @@ The Nutritional Psychiatry Dataset combines data from multiple sources using a m
 6. **Expert Review**: Validation by subject matter experts
 7. **Quality Scoring**: Assigning confidence ratings to all data points
 
+## Research-Driven Schema Design
+
+Our expanded schema is informed by current nutritional psychiatry research, particularly:
+
+### Dietary Pattern Recognition
+Based on Marx et al. (2021), we now track dietary patterns rather than just isolated nutrients. The SMILES trial and similar interventions demonstrate that whole dietary patterns like the Mediterranean diet show stronger associations with mental health outcomes than individual nutrients alone.
+
+### Inflammatory Potential
+Research by Firth et al. (2019) highlights the role of inflammation in the diet-mental health relationship. Our inflammatory index provides a simplified approximation of a food's inflammatory potential based on its nutrient profile.
+
+### Neural Pathway Targeting
+Recent work on nutritional psychiatry has identified specific neural pathways affected by diet. Our schema now tracks impacts on pathways like BDNF signaling, neuroplasticity, and oxidative stress.
+
+### Contextual & Individual Factors
+The field increasingly recognizes that nutrient effects are context-dependent. Our schema now captures:
+- Temporal effects (time of day consumption)
+- Food combination effects (nutrient synergies)
+- Preparation method effects
+- Population-specific variations
+
 ## Data Sources
+
+## Multi-Source Data Integration Approach
+
+Our enhanced methodology incorporates multiple authoritative data sources with intelligent prioritization:
+
+### OpenFoodFacts Integration
+We now incorporate OpenFoodFacts as a complementary data source to address gaps in USDA data, particularly for:
+- International foods not well-represented in USDA
+- Brain-specific nutrients often missing from standard databases
+- Processing level information (NOVA classification)
+- Additional bioactive compounds
+
+### Source Prioritization Strategy
+For each food entry, data is merged from multiple sources using a confidence-based prioritization system:
+1. **Standard Nutrients**: USDA > OpenFoodFacts > Literature > AI-generated
+2. **Brain Nutrients**: Literature > USDA > OpenFoodFacts > AI-generated
+3. **Bioactive Compounds**: Literature > OpenFoodFacts > USDA > AI-generated
+4. **Mental Health Impacts**: Literature > AI-generated
+
+This hierarchical approach ensures we use the most reliable source for each data component.
 
 ### USDA FoodData Central
 
