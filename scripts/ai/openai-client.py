@@ -27,6 +27,9 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import openai
 from openai import AsyncOpenAI, OpenAI
+import re
+import glob
+from string import Template
 
 # Configure logging
 logging.basicConfig(
@@ -122,7 +125,100 @@ class OpenAIClient:
         # Rate limiting
         self.last_request_time = 0
         self.min_request_interval = 0.5  # 500ms minimum between requests
+
+    def load_template(self, template_id: str) -> Dict:
+        """
+        Load a prompt template by ID.
+        
+        Args:
+            template_id: Template identifier
+            
+        Returns:
+            Template dictionary
+        """
+        template_path = None
+        template_pattern = os.path.join("scripts", "ai", "prompt_templates", "*.json")
+        template_files = glob.glob(template_pattern)
+        
+        for file_path in template_files:
+            try:
+                with open(file_path, 'r') as f:
+                    template_data = json.load(f)
+                    if template_data.get("template_id") == template_id:
+                        return template_data
+            except Exception as e:
+                logger.error(f"Error loading template from {file_path}: {e}")
+        
+        raise ValueError(f"Template with ID '{template_id}' not found")
+
+    def _substitute_template_variables(self, template_str: str, variables: Dict) -> str:
+        """
+        Substitute variables in a template string.
+        
+        Args:
+            template_str: Template string with variables in {{var}} format
+            variables: Dictionary of variable values
+            
+        Returns:
+            String with variables substituted
+        """
+        # Handle conditional blocks with {% if condition %}...{% endif %} syntax
+        # This is a simplified implementation that supports basic conditionals
+        pattern = r'{%\s*if\s+(\w+)\s*%}(.*?){%\s*endif\s*%}'
     
+        def replace_conditional(match):
+            condition_var = match.group(1)
+            content = match.group(2)
+            
+            if condition_var in variables and variables[condition_var]:
+                return content
+            return ""
+    
+        # Replace conditionals
+        template_str = re.sub(pattern, replace_conditional, template_str, flags=re.DOTALL)
+        
+        # Replace variables {{var}} with their values
+        pattern = r'{{(\w+(?:_\w+)*)}}'
+        
+        def replace_var(match):
+            var_name = match.group(1)
+            if var_name in variables:
+                value = variables[var_name]
+                # Handle JSON serialization for dict values
+                if isinstance(value, (dict, list)):
+                    return json.dumps(value, indent=2)
+                return str(value)
+            return match.group(0)  # Keep original if not found
+    
+        return re.sub(pattern, replace_var, template_str)
+
+    def create_messages_from_template(self, template_id: str, variables: Dict) -> List[Dict[str, str]]:
+        """
+        Create messages for API request from a template.
+        
+        Args:
+            template_id: Template identifier
+            variables: Dictionary of variable values
+            
+        Returns:
+            List of message dictionaries
+        """
+        template = self.load_template(template_id)
+        
+        system_prompt = template.get("system_prompt", "")
+        user_prompt_template = template.get("user_prompt_template", "")
+        
+        # Substitute variables
+        user_prompt = self._substitute_template_variables(user_prompt_template, variables)
+        
+        # Create messages
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        return messages
+
     def _update_cost(self, usage: Dict[str, int], model: str):
         """Update cost tracking based on token usage."""
         # Simplified cost approximations - should be updated with current pricing
@@ -404,7 +500,8 @@ class OpenAIClient:
         standard_nutrients: Dict, 
         existing_brain_nutrients: Dict,
         target_nutrients: List[str],
-        scientific_context: Optional[str] = None
+        scientific_context: Optional[str] = None,
+        reference_foods: Optional[Dict] = None
     ) -> Dict:
         """
         Predict missing brain-specific nutrients for a food.
@@ -416,61 +513,26 @@ class OpenAIClient:
             existing_brain_nutrients: Dictionary of known brain nutrients
             target_nutrients: List of nutrients to predict
             scientific_context: Optional scientific context for the food
+            reference_foods: Optional reference foods with known values
             
         Returns:
             Dictionary of predicted nutrient values with confidence scores
         """
-        # Construct system prompt with scientific guidelines
-        system_prompt = """You are a nutritional psychiatry expert specializing in brain-specific nutrients. 
-Your task is to predict nutrient levels in foods based on their composition, scientific research, and nutritional databases.
-Follow these guidelines:
-1. Only predict nutrients specifically requested
-2. Base predictions on known nutrient compositions of similar foods
-3. Provide confidence levels (1-10 scale) for each prediction
-4. Explain your reasoning based on food composition
-5. When uncertain, provide conservative ranges rather than precise values
-6. Format all responses as JSON with nutrient names as keys and numeric values
-7. Use standard units: mg for most nutrients, mcg for B12/D/folate/selenium
-8. For nutrients not present in the food, use 0 rather than null
-9. Specify when a prediction has high uncertainty"""
+        # Prepare template variables
+        variables = {
+            "food_name": food_name,
+            "food_category": food_category,
+            "standard_nutrients_json": standard_nutrients,
+            "existing_brain_nutrients_json": existing_brain_nutrients,
+            "target_nutrients_list": ", ".join(target_nutrients),
+            "scientific_context": scientific_context,
+            "reference_foods_json": reference_foods
+        }
         
-        # Construct prompt with food data
-        user_prompt = f"""Based on nutritional science, predict the following missing brain-specific nutrients for {food_name} (category: {food_category}).
-
-The food has these standard nutrients (per 100g unless specified otherwise):
-{json.dumps(standard_nutrients, indent=2)}
-
-Known brain-nutrients (if any):
-{json.dumps(existing_brain_nutrients, indent=2)}
-
-Please predict values for these missing brain nutrients:
-{', '.join(target_nutrients)}
-
-"""
-        if scientific_context:
-            user_prompt += f"\nAdditional scientific context:\n{scientific_context}\n"
-        
-        user_prompt += """
-Your response should be in JSON format with nutrient names as keys and numeric values as values, including a confidence rating (1-10) for each prediction. 
-Example format:
-{
-  "tryptophan_mg": 28.4,
-  "confidence_tryptophan_mg": 7,
-  "vitamin_b12_mcg": 0.0,
-  "confidence_vitamin_b12_mcg": 9,
-  "omega3_total_g": 0.12,
-  "confidence_omega3_total_g": 5,
-  "reasoning": "Tryptophan estimate based on protein content (~1.2% of protein). B12 absent in plant foods with high confidence. Omega-3 estimate has moderate confidence based on similar foods."
-}
-
-Be conservative with your estimates and prioritize scientific accuracy over comprehensiveness."""
+        # Create messages from template
+        messages = self.create_messages_from_template("brain_nutrient_prediction", variables)
         
         # Make API request
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
         response = self.complete("nutrient_prediction", messages)
         response_text = response.choices[0].message.content
         
@@ -481,13 +543,15 @@ Be conservative with your estimates and prioritize scientific accuracy over comp
             logger.error(f"Error parsing nutrient prediction response: {e}")
             logger.error(f"Raw response: {response_text}")
             return {"error": str(e), "raw_response": response_text}
-    
+
     def predict_bioactive_compounds(
         self, 
         food_name: str, 
         food_category: str,
         standard_nutrients: Dict,
-        scientific_context: Optional[str] = None
+        scientific_context: Optional[str] = None,
+        processing_method: Optional[str] = None,
+        additional_compounds: Optional[str] = None
     ) -> Dict:
         """
         Predict bioactive compounds for a food.
@@ -497,66 +561,26 @@ Be conservative with your estimates and prioritize scientific accuracy over comp
             food_category: Food category
             standard_nutrients: Dictionary of standard nutrients
             scientific_context: Optional scientific context
+            processing_method: Optional processing/cooking method
+            additional_compounds: Optional additional compounds to predict
             
         Returns:
             Dictionary of predicted bioactive compounds with confidence scores
         """
-        # Construct system prompt
-        system_prompt = """You are a nutritional biochemistry expert specializing in bioactive compounds in foods.
-Your task is to predict bioactive compound levels in foods based on scientific literature, food composition, and phytochemical databases.
-Follow these guidelines:
-1. Provide realistic estimates for common bioactive compounds
-2. Base predictions on research literature and similar foods
-3. Include confidence ratings (1-10) for each prediction
-4. For compounds absent in a food, use 0 rather than null
-5. Explain your reasoning briefly
-6. Format all responses as JSON with compound names as keys and numeric values
-7. Use appropriate units: mg for most compounds, cfu for probiotics
-8. Be conservative when uncertain - better to underestimate than overestimate"""
+        # Prepare template variables
+        variables = {
+            "food_name": food_name,
+            "food_category": food_category,
+            "standard_nutrients_json": standard_nutrients,
+            "scientific_context": scientific_context,
+            "processing_method": processing_method,
+            "additional_compounds": additional_compounds
+        }
         
-        # Construct user prompt
-        user_prompt = f"""Based on nutritional science, predict the bioactive compounds for {food_name} (category: {food_category}).
-
-The food has these standard nutrients (per 100g):
-{json.dumps(standard_nutrients, indent=2)}
-
-Please predict values for these bioactive compounds (per 100g):
-- polyphenols_mg (total polyphenol content)
-- flavonoids_mg (total flavonoids)
-- anthocyanins_mg (if applicable)
-- carotenoids_mg (total carotenoids)
-- probiotics_cfu (for fermented foods)
-- prebiotic_fiber_g (fermentable fiber)
-
-"""
-        if scientific_context:
-            user_prompt += f"\nAdditional scientific context:\n{scientific_context}\n"
-        
-        user_prompt += """
-Your response should be in JSON format with compound names as keys and numeric values as values. Include confidence ratings and reasoning.
-Example format:
-{
-  "polyphenols_mg": 160.5,
-  "confidence_polyphenols_mg": 7,
-  "flavonoids_mg": 45.2,
-  "confidence_flavonoids_mg": 6,
-  "anthocyanins_mg": 12.3,
-  "confidence_anthocyanins_mg": 8,
-  "carotenoids_mg": 0.8,
-  "confidence_carotenoids_mg": 5,
-  "probiotics_cfu": 0,
-  "confidence_probiotics_cfu": 9,
-  "prebiotic_fiber_g": 1.2,
-  "confidence_prebiotic_fiber_g": 4,
-  "reasoning": "High confidence in polyphenol content for berries; probiotics absent in non-fermented foods; moderate confidence in other estimates based on research literature."
-}"""
+        # Create messages from template
+        messages = self.create_messages_from_template("bioactive_compounds_prediction", variables)
         
         # Make API request
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
         response = self.complete("bioactive_prediction", messages)
         response_text = response.choices[0].message.content
         
@@ -567,7 +591,7 @@ Example format:
             logger.error(f"Error parsing bioactive prediction response: {e}")
             logger.error(f"Raw response: {response_text}")
             return {"error": str(e), "raw_response": response_text}
-    
+
     def generate_mental_health_impacts(
         self,
         food_name: str,
@@ -593,81 +617,21 @@ Example format:
         Returns:
             List of dictionaries with mental health impacts
         """
-        # Construct system prompt
-        system_prompt = """You are an expert in nutritional psychiatry focusing on food-mood relationships.
-Your task is to identify evidence-based connections between specific foods and mental health outcomes.
-Follow these guidelines:
-1. Only include relationships with scientific support - either direct studies or strong mechanistic evidence
-2. Prioritize relationships with stronger evidence (human RCTs > cohort studies > animal studies)
-3. Include both positive and negative impacts where relevant
-4. Provide confidence ratings (1-10) based on evidence quality
-5. Explain mechanisms of action in detail
-6. Be conservative - better to identify fewer high-confidence relationships than many speculative ones
-7. Format as a JSON array of impact objects with specific fields
-8. Include relevant citations with PubMed IDs or DOIs when possible
-9. For each impact, specify whether effects are acute (immediate) or cumulative (long-term)"""
+        # Prepare template variables
+        variables = {
+            "food_name": food_name,
+            "food_category": food_category,
+            "standard_nutrients_json": standard_nutrients,
+            "brain_nutrients_json": brain_nutrients,
+            "bioactive_compounds_json": bioactive_compounds,
+            "scientific_context": scientific_context,
+            "max_impacts": max_impacts
+        }
         
-        # Construct user prompt
-        user_prompt = f"""Based on current nutritional psychiatry research, analyze the potential mental health impacts of {food_name} (category: {food_category}).
-
-The food has these standard nutrients:
-{json.dumps(standard_nutrients, indent=2)}
-
-Brain-specific nutrients:
-{json.dumps(brain_nutrients, indent=2)}
-
-Bioactive compounds:
-{json.dumps(bioactive_compounds, indent=2)}
-
-Please identify {max_impacts} evidence-based mental health impacts this food may have. Focus on impacts with the strongest research support.
-
-"""
-        if scientific_context:
-            user_prompt += f"\nAdditional scientific context:\n{scientific_context}\n"
-        
-        user_prompt += """
-For each impact, provide:
-1. Impact type (e.g., mood_elevation, anxiety_reduction, cognitive_enhancement)
-2. Direction (positive, negative, neutral, or mixed)
-3. Mechanism of action (how nutrients in this food affect the brain/body)
-4. Strength of effect (1-10 scale)
-5. Confidence level based on research evidence (1-10 scale)
-6. Time frame for effect (acute/immediate or cumulative/long-term)
-7. Brief research context (types of studies supporting this, limitations)
-8. Research citations (PubMed IDs or DOIs)
-
-Your response should be in JSON format. Example:
-[
-  {
-    "impact_type": "mood_elevation",
-    "direction": "positive",
-    "mechanism": "Omega-3 fatty acids reduce inflammation and support serotonin receptor function",
-    "strength": 7,
-    "confidence": 8,
-    "time_to_effect": "cumulative",
-    "research_context": "Multiple RCTs and meta-analyses show mood benefits with regular consumption",
-    "research_citations": ["PMID: 26186123", "DOI: 10.1016/j.nut.2015.05.016"]
-  },
-  {
-    "impact_type": "cognitive_function",
-    "direction": "positive",
-    "mechanism": "Antioxidants reduce oxidative stress in neural tissues",
-    "strength": 5,
-    "confidence": 6,
-    "time_to_effect": "both_acute_and_cumulative",
-    "research_context": "Animal models show clear benefits; human studies show mixed but generally positive results",
-    "research_citations": ["PMID: 27825512", "DOI: 10.3390/nu8110736"]
-  }
-]
-
-Base your analysis on known mechanisms in nutritional psychiatry and the specific nutrient profile of this food. Please be evidence-based rather than speculative."""
+        # Create messages from template
+        messages = self.create_messages_from_template("mental_health_impacts", variables)
         
         # Make API request
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
         response = self.complete("impact_generation", messages)
         response_text = response.choices[0].message.content
         
