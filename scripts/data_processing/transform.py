@@ -326,7 +326,7 @@ class USDADataTransformer:
 def main():
     """Main function to execute the transformation."""
     # Paths
-    schema_path = os.path.join("schema", "food_schema.json")
+    schema_path = os.path.join("schema", "schema.json")
     input_dir = os.path.join("data", "raw", "usda_foods")
     output_dir = os.path.join("data", "processed", "base_foods")
     

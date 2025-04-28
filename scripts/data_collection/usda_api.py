@@ -165,48 +165,7 @@ def fetch_poc_foods(api_client: USDAFoodDataCentralAPI, output_dir: str) -> List
     """
     # Example foods representing diverse categories for POC
     poc_foods = [
-        # Fruits with known mood benefits
-        {"name": "Blueberries", "search_term": "blueberries raw"},
-        {"name": "Avocados", "search_term": "avocado raw"},
-        {"name": "Bananas", "search_term": "banana raw"},
-        
-        # Vegetables with various nutrient profiles
-        {"name": "Spinach", "search_term": "spinach raw"},
-        {"name": "Kale", "search_term": "kale raw"},
-        {"name": "Broccoli", "search_term": "broccoli raw"},
-        
-        # Proteins with brain benefits
-        {"name": "Salmon", "search_term": "salmon atlantic raw"},
-        {"name": "Eggs", "search_term": "egg whole raw"},
-        {"name": "Chicken Breast", "search_term": "chicken breast raw"},
-        {"name": "Lentils", "search_term": "lentils raw"},
-        
-        # Nuts and seeds high in brain nutrients
-        {"name": "Walnuts", "search_term": "walnuts english"},
-        {"name": "Almonds", "search_term": "almonds raw"},
-        {"name": "Chia Seeds", "search_term": "chia seeds"},
-        {"name": "Flaxseeds", "search_term": "flaxseeds"},
-        
-        # Grains with varying effects
-        {"name": "Oats", "search_term": "oats rolled raw"},
-        {"name": "Brown Rice", "search_term": "rice brown raw"},
-        {"name": "Quinoa", "search_term": "quinoa raw"},
-        {"name": "White Bread", "search_term": "bread white"},
-        
-        # Fermented and probiotic foods
-        {"name": "Greek Yogurt", "search_term": "yogurt greek plain"},
-        {"name": "Kimchi", "search_term": "kimchi"},
-        {"name": "Sauerkraut", "search_term": "sauerkraut"},
-        
-        # Beverages
-        {"name": "Green Tea", "search_term": "tea green brewed"},
-        {"name": "Coffee", "search_term": "coffee brewed"},
-        {"name": "Dark Chocolate", "search_term": "chocolate dark"},
-        
-        # Foods with potentially negative impacts
-        {"name": "Sugary Soda", "search_term": "soda cola"},
-        {"name": "Potato Chips", "search_term": "potato chips"},
-        {"name": "Fast Food Burger", "search_term": "hamburger fast food"}
+        {"name": "Blueberries", "search_term": "blueberries raw"}
     ]
     
     saved_files = []

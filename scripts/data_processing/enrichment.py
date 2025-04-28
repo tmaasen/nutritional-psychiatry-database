@@ -667,7 +667,7 @@ def main():
                         help="Directory with base food data")
     parser.add_argument("--output-dir", default=os.path.join("data", "enriched", "ai_generated"),
                         help="Directory to save enriched data")
-    parser.add_argument("--api-key", help="OpenAI API key (or set OPENAI_API_KEY environment variable)")
+    parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY"),  help="OpenAI API key (or set OPENAI_API_KEY environment variable)")
     parser.add_argument("--model", default="gpt-4", help="OpenAI model to use")
     parser.add_argument("--limit", type=int, help="Limit number of files to process")
     
