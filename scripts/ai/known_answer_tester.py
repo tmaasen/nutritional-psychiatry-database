@@ -328,7 +328,7 @@ class KnownAnswerTester:
         logger.info(f"Testing mental health impact predictions for {food_name}")
         
         # Get predictions from the AI
-        predicted_impacts = self.openai_client.generate_mental_health_impacts(
+        predicted_impacts = self.openai_client.predict_mental_health_impacts(
             food_name=food_name,
             food_category=food_category,
             standard_nutrients=standard_nutrients,

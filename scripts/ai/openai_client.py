@@ -396,10 +396,16 @@ class OpenAIClient:
             # Apply rate limiting
             await asyncio.sleep(self.min_request_interval)
             
-            # Make request
-            response = await self.client.chat.completions.create(
+            input_text = ""
+            for message in messages:
+                role = message.get("role", "")
+                content = message.get("content", "")
+                input_text += f"{role}: {content}\n\n"
+            
+            # Make request using Responses API
+            response = self.client.responses.create(
                 model=model,
-                messages=messages,
+                input=input_text,
                 temperature=temperature
             )
             
@@ -464,11 +470,17 @@ class OpenAIClient:
         try:
             # Apply rate limiting
             self._apply_rate_limiting()
+
+            input_text = ""
+            for message in messages:
+                role = message.get("role", "")
+                content = message.get("content", "")
+                input_text += f"{role}: {content}\n\n"
             
-            # Make request
-            response = self.client.chat.completions.create(
+            # Make request using Responses API
+            response = self.client.responses.create(
                 model=model,
-                messages=messages,
+                input=input_text,
                 temperature=temperature
             )
             
@@ -534,7 +546,9 @@ class OpenAIClient:
         
         # Make API request
         response = self.complete("nutrient_prediction", messages)
-        response_text = response.choices[0].message.content
+        
+        # Extract response content - adjusting for the Responses API format
+        response_text = response.content
         
         try:
             predicted_nutrients = self._validate_json_response(response_text)
@@ -582,7 +596,7 @@ class OpenAIClient:
         
         # Make API request
         response = self.complete("bioactive_prediction", messages)
-        response_text = response.choices[0].message.content
+        response_text = response.content
         
         try:
             predicted_compounds = self._validate_json_response(response_text)
@@ -592,7 +606,7 @@ class OpenAIClient:
             logger.error(f"Raw response: {response_text}")
             return {"error": str(e), "raw_response": response_text}
 
-    def generate_mental_health_impacts(
+    def predict_mental_health_impacts(
         self,
         food_name: str,
         food_category: str,
@@ -633,7 +647,7 @@ class OpenAIClient:
         
         # Make API request
         response = self.complete("impact_generation", messages)
-        response_text = response.choices[0].message.content
+        response_text = response.content
         
         try:
             mental_health_impacts = self._validate_json_response(response_text)
@@ -711,7 +725,7 @@ Add a "calibration_notes" field explaining your reasoning for any significant ad
         ]
         
         response = self.complete("confidence_calibration", messages)
-        response_text = response.choices[0].message.content
+        response_text = response.content
         
         try:
             calibrated_data = self._validate_json_response(response_text)
@@ -792,7 +806,7 @@ Format your response as a JSON object with the following structure:
         ]
         
         response = self.complete("mechanism_identification", messages)
-        response_text = response.choices[0].message.content
+        response_text = response.content
         
         try:
             mechanism_data = self._validate_json_response(response_text)

@@ -1,0 +1,52 @@
+{
+  "food_id": "usda_2709275",
+  "name": "Blueberries, raw",
+  "description": "Blueberries, raw",
+  "category": "",
+  "standard_nutrients": {
+    "protein_g": 0.7,
+    "fat_g": 0.31,
+    "carbohydrates_g": 14.6,
+    "calories": 64.0,
+    "sugars_g": 9.36,
+    "fiber_g": 2.4,
+    "calcium_mg": 12.0,
+    "phosphorus_mg": 13.0,
+    "potassium_mg": 86.0,
+    "sodium_mg": 0.0,
+    "copper_mg": 0.046
+  },
+  "brain_nutrients": {
+    "omega3": {
+      "confidence": 5.0,
+      "total_g": 0.028,
+      "dha_mg": 0.0
+    },
+    "iron_mg": 0.34,
+    "magnesium_mg": 6.0,
+    "zinc_mg": 0.09,
+    "selenium_mcg": 0.1,
+    "vitamin_b6_mg": 3.0,
+    "vitamin_e_mg": 0.57,
+    "folate_mcg": 6.0,
+    "vitamin_b12_mcg": 0.0,
+    "choline_mg": 6.0
+  },
+  "data_quality": {
+    "completeness": 0.71,
+    "overall_confidence": 7,
+    "brain_nutrients_source": "usda_provided",
+    "impacts_source": null
+  },
+  "bioactive_compounds": {},
+  "mental_health_impacts": [],
+  "metadata": {
+    "version": "0.1.0",
+    "created": "2025-04-27T22:24:17.678443",
+    "last_updated": "2025-04-28T20:36:34.572460",
+    "source_urls": [
+      "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2709275/nutrients"
+    ],
+    "tags": []
+  }
+}

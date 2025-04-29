@@ -15,12 +15,14 @@ import argparse
 from datetime import datetime
 import sys
 
+# Add the project root directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+from scripts.ai.openai_client import OpenAIClient
+
 # Check if OpenAI is installed
 if importlib.util.find_spec("openai") is None:
     print("This script requires the OpenAI Python package. Install with: pip install openai")
     sys.exit(1)
-
-import openai
 
 # Configure logging
 logging.basicConfig(
@@ -69,12 +71,10 @@ class AIEnrichmentEngine:
             api_key: OpenAI API key
             model: Model to use for generation
         """
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        if not self.api_key:
+        if not api_key:
             raise ValueError("OpenAI API key is required. Set it as an argument or as OPENAI_API_KEY environment variable.")
         
-        openai.api_key = self.api_key
-        self.model = model
+        self.openai_client = OpenAIClient(api_key=api_key)
         logger.info(f"Initialized AI Enrichment Engine using {model} model")
     
     def enrich_brain_nutrients(self, food_data: Dict) -> Dict:
@@ -121,32 +121,15 @@ class AIEnrichmentEngine:
         
         logger.info(f"Predicting missing brain nutrients for {food_name}: {missing_nutrients}")
         
-        # Create prompt for AI
-        prompt = self._create_brain_nutrients_prompt(
-            food_name=food_name,
-            food_category=food_category,
-            standard_nutrients=standard_nutrients,
-            brain_nutrients=brain_nutrients,
-            missing_nutrients=missing_nutrients
-        )
-        
         # Generate predictions using AI
         try:
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a highly knowledgeable nutritional science expert with specific expertise in nutritional psychiatry and brain-specific nutrients."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1000
+            predicted_nutrients = self.openai_client.predict_nutrients(
+                food_name=food_name,
+                food_category=food_category,
+                standard_nutrients=standard_nutrients,
+                existing_brain_nutrients=brain_nutrients,
+                target_nutrients=missing_nutrients
             )
-            
-            ai_response = response.choices[0].message.content
-            logger.debug(f"AI Response: {ai_response}")
-            
-            # Parse the generated predictions
-            predicted_nutrients = self._parse_nutrient_predictions(ai_response)
             
             # Update the enriched data with predictions
             for nutrient_path, value in predicted_nutrients.items():
@@ -197,6 +180,7 @@ class AIEnrichmentEngine:
         # Get food name and basic information
         food_name = food_data.get('name', '')
         food_category = food_data.get('category', '')
+        standard_nutrients = food_data.get('standard_nutrients', {})
         
         # Get existing bioactive compounds
         bioactive_compounds = food_data.get('bioactive_compounds', {})
@@ -208,29 +192,16 @@ class AIEnrichmentEngine:
         
         logger.info(f"Predicting bioactive compounds for {food_name}")
         
-        # Create prompt for AI
-        prompt = self._create_bioactive_compounds_prompt(
-            food_name=food_name,
-            food_category=food_category
-        )
-        
         # Generate predictions using AI
         try:
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a highly knowledgeable nutritional science expert with specific expertise in bioactive compounds in foods."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=800
+            predicted_compounds = self.openai_client.predict_bioactive_compounds(
+                food_name=food_name,
+                food_category=food_category,
+                standard_nutrients=standard_nutrients
             )
             
-            ai_response = response.choices[0].message.content
-            logger.debug(f"AI Response: {ai_response}")
-            
             # Parse the generated predictions
-            predicted_compounds = self._parse_bioactive_predictions(ai_response)
+            predicted_compounds = self._parse_bioactive_predictions(predicted_compounds)
             
             # Update the enriched data with predictions
             if 'bioactive_compounds' not in enriched_data:
@@ -278,32 +249,18 @@ class AIEnrichmentEngine:
         
         logger.info(f"Predicting mental health impacts for {food_name}")
         
-        # Create prompt for AI
-        prompt = self._create_mental_health_impacts_prompt(
-            food_name=food_name,
-            food_category=food_category,
-            standard_nutrients=standard_nutrients,
-            brain_nutrients=brain_nutrients,
-            bioactive_compounds=bioactive_compounds
-        )
-        
         # Generate predictions using AI
         try:
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a highly knowledgeable nutritional psychiatry expert who understands how specific nutrients and compounds affect brain function, mood, and mental health."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1200
+            predicted_impacts = self.openai_client.predict_mental_health_impacts(
+                food_name=food_name,
+                food_category=food_category,
+                standard_nutrients=standard_nutrients,
+                brain_nutrients=brain_nutrients,
+                bioactive_compounds=bioactive_compounds
             )
             
-            ai_response = response.choices[0].message.content
-            logger.debug(f"AI Response: {ai_response}")
-            
             # Parse the generated predictions
-            predicted_impacts = self._parse_mental_health_impacts(ai_response)
+            predicted_impacts = self._parse_mental_health_impacts(predicted_impacts)
             
             # Update the enriched data with predictions
             enriched_data['mental_health_impacts'] = predicted_impacts
@@ -321,167 +278,6 @@ class AIEnrichmentEngine:
             logger.error(f"Error predicting mental health impacts for {food_name}: {e}")
         
         return enriched_data
-    
-    def _create_brain_nutrients_prompt(self, food_name: str, food_category: str, 
-                                       standard_nutrients: Dict, brain_nutrients: Dict,
-                                       missing_nutrients: List[str]) -> str:
-        """
-        Create a prompt for predicting missing brain nutrients.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            standard_nutrients: Standard nutrients data
-            brain_nutrients: Existing brain nutrients data
-            missing_nutrients: List of missing brain nutrients to predict
-            
-        Returns:
-            Formatted prompt for AI
-        """
-        # Convert nutrient data to a formatted string
-        nutrients_str = json.dumps(standard_nutrients, indent=2)
-        existing_brain_str = json.dumps(brain_nutrients, indent=2)
-        
-        # Format missing nutrients for display
-        missing_formatted = "\n".join([f"- {n}" for n in missing_nutrients])
-        
-        prompt = f"""Based on nutritional science, predict the following missing brain-specific nutrients for {food_name} (category: {food_category}).
-
-The food has these standard nutrients (per 100g unless specified otherwise):
-{nutrients_str}
-
-And these known brain-nutrients:
-{existing_brain_str}
-
-Please predict values for these missing brain nutrients:
-{missing_formatted}
-
-Your response should be in JSON format with nutrient names as keys and numeric values as values, including appropriate confidence ranges when uncertain. Example:
-```json
-{{
-  "tryptophan_mg": 28.4,
-  "vitamin_b12_mcg": 0.0,
-  "omega3.total_g": 0.12,
-  "confidence_note": "Tryptophan estimates are based on protein content, B12 is absent in plant foods, omega-3 estimate has moderate confidence based on similar foods."
-}}
-```
-
-For confidence: Use realistic ranges based on the food type. For plant foods, certain nutrients like B12 will be 0. For animal products, tryptophan can be estimated from protein content (approximately 1-1.5% of protein). Use evidence-based reasoning for your estimates.
-
-Remember to predict only the missing nutrients listed above. Do not include nutrients that already exist in the data.
-"""
-        return prompt
-    
-    def _create_bioactive_compounds_prompt(self, food_name: str, food_category: str) -> str:
-        """
-        Create a prompt for predicting bioactive compounds.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            
-        Returns:
-            Formatted prompt for AI
-        """
-        # Format compounds to predict
-        compounds_formatted = "\n".join([f"- {c}" for c in self.BIOACTIVE_COMPOUNDS_TO_PREDICT])
-        
-        prompt = f"""Based on nutritional science, predict the bioactive compounds for {food_name} (category: {food_category}).
-
-Please predict values for these bioactive compounds (per 100g):
-{compounds_formatted}
-
-Your response should be in JSON format with compound names as keys and numeric values as values. Include confidence ratings and notes on your estimations. Example:
-```json
-{{
-  "polyphenols_mg": 160.5,
-  "flavonoids_mg": 45.2,
-  "anthocyanins_mg": 12.3,
-  "carotenoids_mg": 0.8,
-  "probiotics_cfu": 0,
-  "prebiotic_fiber_g": 1.2,
-  "confidence_note": "High confidence in polyphenol content for berries; probiotics absent in non-fermented foods; moderate confidence in other estimates based on research literature."
-}}
-```
-
-Use your knowledge of food composition to make reasonable estimates. If a compound is completely absent (e.g., probiotics in non-fermented foods), use 0. For compounds with wide variation, provide a representative average.
-"""
-        return prompt
-    
-    def _create_mental_health_impacts_prompt(self, food_name: str, food_category: str,
-                                            standard_nutrients: Dict, brain_nutrients: Dict,
-                                            bioactive_compounds: Dict) -> str:
-        """
-        Create a prompt for predicting mental health impacts.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            standard_nutrients: Standard nutrients data
-            brain_nutrients: Brain nutrients data
-            bioactive_compounds: Bioactive compounds data
-            
-        Returns:
-            Formatted prompt for AI
-        """
-        # Convert nutrient data to formatted strings
-        nutrients_str = json.dumps(standard_nutrients, indent=2)
-        brain_str = json.dumps(brain_nutrients, indent=2)
-        bioactive_str = json.dumps(bioactive_compounds, indent=2)
-        
-        prompt = f"""Based on current nutritional psychiatry research, analyze the potential mental health impacts of {food_name} (category: {food_category}).
-
-The food has these standard nutrients:
-{nutrients_str}
-
-Brain-specific nutrients:
-{brain_str}
-
-Bioactive compounds:
-{bioactive_str}
-
-Please identify 2-4 evidence-based mental health impacts this food may have. Focus on impacts that have the strongest research support.
-
-For each impact, provide:
-1. Impact type (e.g., mood_elevation, anxiety_reduction, cognitive_enhancement)
-2. Direction (positive, negative, neutral, or mixed)
-3. Mechanism of action (how nutrients in this food affect the brain/body)
-4. Strength of effect (1-10 scale)
-5. Confidence level based on research evidence (1-10 scale)
-6. Time frame for effect (acute/immediate or cumulative/long-term)
-7. Brief research context (types of studies supporting this, limitations)
-
-Your response should be in JSON format. Example:
-```json
-[
-  {{
-    "impact_type": "mood_elevation",
-    "direction": "positive",
-    "mechanism": "Omega-3 fatty acids reduce inflammation and support serotonin receptor function",
-    "strength": 7,
-    "confidence": 8,
-    "time_to_effect": "cumulative",
-    "research_context": "Multiple RCTs and meta-analyses show mood benefits with regular consumption",
-    "research_citations": ["PMID: 12345678", "DOI: 10.1001/journal.2019.123"]
-  }},
-  {{
-    "impact_type": "cognitive_function",
-    "direction": "positive",
-    "mechanism": "Antioxidants reduce oxidative stress in neural tissues",
-    "strength": 5,
-    "confidence": 6,
-    "time_to_effect": "both_acute_and_cumulative",
-    "research_context": "Animal models show clear benefits; human studies show mixed but generally positive results",
-    "research_citations": ["PMID: 87654321", "DOI: 10.1002/journal.2020.456"]
-  }}
-]
-```
-
-Base your analysis on known mechanisms in nutritional psychiatry and the specific nutrient profile of this food. Consider both direct effects (e.g., tryptophan → serotonin) and indirect effects (e.g., gut microbiome impacts).
-
-Keep in mind that for some foods, the most evidence-based answer may be minimal or neutral impact.
-"""
-        return prompt
     
     def _parse_nutrient_predictions(self, ai_response: str) -> Dict[str, float]:
         """

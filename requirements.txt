@@ -8,7 +8,7 @@ python-dotenv>=0.19.0
 jsonschema>=4.4.0
 
 # For OpenAI API integration
-openai>=0.27.0
+openai>=1.0.0
 tenacity>=8.0.0  # For retry logic in openai-client.py
 
 # For text processing and extraction
