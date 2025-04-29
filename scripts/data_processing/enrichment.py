@@ -201,7 +201,7 @@ class AIEnrichmentEngine:
             )
             
             # Parse the generated predictions
-            predicted_compounds = self._parse_bioactive_predictions(predicted_compounds)
+            predicted_compounds = self.parse_bioactive_predictions(predicted_compounds)
             
             # Update the enriched data with predictions
             if 'bioactive_compounds' not in enriched_data:
@@ -260,7 +260,7 @@ class AIEnrichmentEngine:
             )
             
             # Parse the generated predictions
-            predicted_impacts = self._parse_mental_health_impacts(predicted_impacts)
+            predicted_impacts = self.parse_mental_health_impacts(predicted_impacts)
             
             # Update the enriched data with predictions
             enriched_data['mental_health_impacts'] = predicted_impacts
@@ -279,7 +279,7 @@ class AIEnrichmentEngine:
         
         return enriched_data
     
-    def _parse_nutrient_predictions(self, ai_response: str) -> Dict[str, float]:
+    def parse_nutrient_predictions(self, ai_response: str) -> Dict[str, float]:
         """
         Parse nutrient predictions from AI response.
         
@@ -313,7 +313,7 @@ class AIEnrichmentEngine:
             logger.error(f"Error parsing nutrient predictions: {e}")
             return {}
     
-    def _parse_bioactive_predictions(self, ai_response: str) -> Dict[str, float]:
+    def parse_bioactive_predictions(self, ai_response: str) -> Dict[str, float]:
         """
         Parse bioactive compound predictions from AI response.
         
@@ -324,9 +324,9 @@ class AIEnrichmentEngine:
             Dictionary of bioactive compound predictions
         """
         # Use the same parsing logic as for nutrients
-        return self._parse_nutrient_predictions(ai_response)
+        return self.parse_nutrient_predictions(ai_response)
     
-    def _parse_mental_health_impacts(self, ai_response: str) -> List[Dict]:
+    def parse_mental_health_impacts(self, ai_response: str) -> List[Dict]:
         """
         Parse mental health impact predictions from AI response.
         

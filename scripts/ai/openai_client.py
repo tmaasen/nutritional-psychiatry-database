@@ -10,7 +10,7 @@ This client handles all interactions with the OpenAI API for data enrichment:
 - Confidence scoring calibration
 
 Features:
-- Configurable model selection (GPT-4/3.5)
+- Configurable model selection
 - Tiered fallback strategy for API errors
 - Request rate limiting
 - Response validation
@@ -43,17 +43,17 @@ class OpenAIClient:
     
     # Default models to use for different tasks
     DEFAULT_MODELS = {
-        "nutrient_prediction": "gpt-4",
-        "bioactive_prediction": "gpt-4",
-        "impact_generation": "gpt-4",
-        "mechanism_identification": "gpt-4",
-        "confidence_calibration": "gpt-4-turbo",
+        "nutrient_prediction": "gpt-4o-mini",
+        "bioactive_prediction": "gpt-4o-mini",
+        "impact_generation": "gpt-4o-mini",
+        "mechanism_identification": "gpt-4o-mini",
+        "confidence_calibration": "gpt-4o-mini",
         "fallback": "gpt-3.5-turbo"
     }
     
     # Token limits by model
     TOKEN_LIMITS = {
-        "gpt-4": 8192,
+        "gpt-4o-mini": 8192,
         "gpt-4-turbo": 128000,
         "gpt-3.5-turbo": 4096
     }
@@ -219,34 +219,6 @@ class OpenAIClient:
         
         return messages
 
-    def _update_cost(self, usage: Dict[str, int], model: str):
-        """Update cost tracking based on token usage."""
-        # Simplified cost approximations - should be updated with current pricing
-        cost_per_1k_tokens = {
-            "gpt-4": {"prompt": 0.03, "completion": 0.06},
-            "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
-            "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002}
-        }
-        
-        # Default to gpt-4 pricing if model not found
-        model_base = model.split("-")[0] + "-" + model.split("-")[1]
-        if model_base in cost_per_1k_tokens:
-            cost_rates = cost_per_1k_tokens[model_base]
-        else:
-            cost_rates = cost_per_1k_tokens["gpt-4"]
-        
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        
-        prompt_cost = (prompt_tokens / 1000) * cost_rates["prompt"]
-        completion_cost = (completion_tokens / 1000) * cost_rates["completion"]
-        
-        self.cost_tracker["prompt_tokens"] += prompt_tokens
-        self.cost_tracker["completion_tokens"] += completion_tokens
-        self.cost_tracker["total_tokens"] += prompt_tokens + completion_tokens
-        self.cost_tracker["total_cost"] += prompt_cost + completion_cost
-        self.cost_tracker["requests"] += 1
-    
     def _log_request(self, task_type: str, model: str, messages: List[Dict], temperature: float):
         """Log API request details."""
         if not self.log_dir:
@@ -306,54 +278,21 @@ class OpenAIClient:
     
     def _validate_json_response(self, text: str) -> Dict:
         """
-        Extract and validate JSON from AI response text.
+        Parse JSON from AI response text.
         
         Args:
-            text: Response text possibly containing JSON
+            text: Response text containing JSON
             
         Returns:
             Parsed JSON dictionary
         
         Raises:
-            ValueError: If valid JSON cannot be extracted
+            ValueError: If valid JSON cannot be parsed
         """
-        # Find JSON content between triple backticks, if present
-        if "```json" in text:
-            parts = text.split("```json")
-            if len(parts) > 1:
-                json_text = parts[1].split("```")[0].strip()
-            else:
-                json_text = text
-        elif "```" in text:
-            parts = text.split("```")
-            if len(parts) > 1:
-                json_text = parts[1].strip()
-            else:
-                json_text = text
-        else:
-            # If no code blocks, try to find JSON brackets
-            start_idx = text.find('{')
-            end_idx = text.rfind('}')
-            if start_idx != -1 and end_idx != -1:
-                json_text = text[start_idx:end_idx+1]
-            else:
-                json_text = text
-        
         try:
-            return json.loads(json_text)
-        except json.JSONDecodeError:
-            # Attempt more aggressive JSON extraction
-            # Find the outermost curly braces
-            start_idx = text.find('{')
-            end_idx = text.rfind('}')
-            
-            if start_idx != -1 and end_idx != -1:
-                try:
-                    return json.loads(text[start_idx:end_idx+1])
-                except json.JSONDecodeError:
-                    raise ValueError(f"Could not extract valid JSON from response: {text}")
-            else:
-                raise ValueError("No valid JSON found in response")
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Could not parse JSON from response: {e}")
     
     @retry(
         retry=retry_if_exception_type((openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError)),
@@ -388,6 +327,8 @@ class OpenAIClient:
         
         if temperature is None:
             temperature = self.TEMPERATURE_SETTINGS.get(task_type, 0.3)
+
+        we_did_not_specify_stop_tokens = True
         
         # Log request
         self._log_request(task_type, model, messages, temperature)
@@ -396,27 +337,44 @@ class OpenAIClient:
             # Apply rate limiting
             await asyncio.sleep(self.min_request_interval)
             
-            input_text = ""
+            user_message = None
             for message in messages:
-                role = message.get("role", "")
-                content = message.get("content", "")
-                input_text += f"{role}: {content}\n\n"
-            
-            # Make request using Responses API
+                if message.get("role") == "system":
+                    instructions = message.get("content")
+                elif message.get("role") == "user":
+                    user_message = message.get("content")
+        
+            # Make request using Responses API with JSON mode
             response = self.client.responses.create(
                 model=model,
-                input=input_text,
-                temperature=temperature
+                instructions=instructions,
+                input=user_message,
+                temperature=temperature,
+                text={"format": {"type": "json_object"}}
             )
-            
-            # Update cost tracking
-            if hasattr(response, 'usage'):
-                self._update_cost(response.usage, model)
-            
-            # Log response
-            self._log_response(task_type, response)
-            
-            return response
+
+            # Check if the conversation was too long for the context window, resulting in incomplete JSON 
+            if response.status == "incomplete" and response.incomplete_details.reason == "max_output_tokens":
+                raise Exception("Response incomplete due to output token limit being reached. Please check the token limit for this model")
+
+            # Check if the OpenAI safety system refused the request and generated a refusal instead
+            if response.output[0].content[0].type == "refusal":
+                # In this case, the .content field will contain the explanation (if any) that the model generated for why it is refusing
+                raise Exception("Response refused. Reason: " + response.output[0].content[0]["refusal"])
+
+            # Check if the model's output included restricted content, so the generation of JSON was halted and may be partial
+            if response.status == "incomplete" and response.incomplete_details.reason == "content_filter":
+                raise Exception("Response incomplete due to restricted content in response. Please check your configured content filter.")
+
+            if response.status == "completed":
+                if we_did_not_specify_stop_tokens:
+                    # If you didn't specify any stop tokens, then the generation is complete and the content key will contain the serialized JSON object
+                    # Log response
+                    self._log_response(task_type, response.output_text)
+                    return response.output_text
+                else:
+                    # Check if the response.output_text ends with one of your stop tokens and handle appropriately
+                    pass
             
         except Exception as e:
             # Log error
@@ -456,7 +414,7 @@ class OpenAIClient:
         """
         if self.async_mode:
             raise ValueError("Client initialized for async mode, use async_complete instead")
-        
+
         # Select model and temperature based on task type
         if model is None:
             model = self.models.get(task_type, self.models["fallback"])
@@ -464,34 +422,55 @@ class OpenAIClient:
         if temperature is None:
             temperature = self.TEMPERATURE_SETTINGS.get(task_type, 0.3)
         
+        we_did_not_specify_stop_tokens = True
+
         # Log request
         self._log_request(task_type, model, messages, temperature)
-        
+    
         try:
             # Apply rate limiting
             self._apply_rate_limiting()
 
-            input_text = ""
+            # Extract system message for instructions
+            instructions = None
+            user_message = None
             for message in messages:
-                role = message.get("role", "")
-                content = message.get("content", "")
-                input_text += f"{role}: {content}\n\n"
-            
-            # Make request using Responses API
+                if message.get("role") == "system":
+                    instructions = message.get("content")
+                elif message.get("role") == "user":
+                    user_message = message.get("content")
+        
+            # Make request using Responses API with JSON mode
             response = self.client.responses.create(
                 model=model,
-                input=input_text,
-                temperature=temperature
+                instructions=instructions,
+                input=user_message,
+                temperature=temperature,
+                text={"format": {"type": "json_object"}}
             )
-            
-            # Update cost tracking
-            if hasattr(response, 'usage'):
-                self._update_cost(response.usage.model_dump(), model)
-            
-            # Log response
-            self._log_response(task_type, response.model_dump())
-            
-            return response
+        
+            # Check if the conversation was too long for the context window, resulting in incomplete JSON 
+            if response.status == "incomplete" and response.incomplete_details.reason == "max_output_tokens":
+                raise Exception("Response incomplete due to output token limit being reached. Please check the token limit for this model")
+
+            # Check if the OpenAI safety system refused the request and generated a refusal instead
+            if response.output[0].content[0].type == "refusal":
+                # In this case, the .content field will contain the explanation (if any) that the model generated for why it is refusing
+                raise Exception("Response refused. Reason: " + response.output[0].content[0]["refusal"])
+
+            # Check if the model's output included restricted content, so the generation of JSON was halted and may be partial
+            if response.status == "incomplete" and response.incomplete_details.reason == "content_filter":
+                raise Exception("Response incomplete due to restricted content in response. Please check your configured content filter.")
+
+            if response.status == "completed":
+                if we_did_not_specify_stop_tokens:
+                    # If you didn't specify any stop tokens, then the generation is complete and the content key will contain the serialized JSON object
+                    # Log response
+                    self._log_response(task_type, response.output_text)
+                    return response.output_text
+                else:
+                    # Check if the response.output_text ends with one of your stop tokens and handle appropriately
+                    pass
             
         except Exception as e:
             # Log error
@@ -504,7 +483,7 @@ class OpenAIClient:
             
             # Re-raise for retry mechanism
             raise
-    
+
     def predict_nutrients(
         self, 
         food_name: str, 
@@ -547,16 +526,13 @@ class OpenAIClient:
         # Make API request
         response = self.complete("nutrient_prediction", messages)
         
-        # Extract response content - adjusting for the Responses API format
-        response_text = response.content
-        
         try:
-            predicted_nutrients = self._validate_json_response(response_text)
+            predicted_nutrients = self._validate_json_response(response)
             return predicted_nutrients
         except ValueError as e:
             logger.error(f"Error parsing nutrient prediction response: {e}")
-            logger.error(f"Raw response: {response_text}")
-            return {"error": str(e), "raw_response": response_text}
+            logger.error(f"Raw response: {response}")
+            return {"error": str(e), "raw_response": response}
 
     def predict_bioactive_compounds(
         self, 
@@ -596,15 +572,14 @@ class OpenAIClient:
         
         # Make API request
         response = self.complete("bioactive_prediction", messages)
-        response_text = response.content
         
         try:
-            predicted_compounds = self._validate_json_response(response_text)
+            predicted_compounds = self._validate_json_response(response)
             return predicted_compounds
         except ValueError as e:
             logger.error(f"Error parsing bioactive prediction response: {e}")
-            logger.error(f"Raw response: {response_text}")
-            return {"error": str(e), "raw_response": response_text}
+            logger.error(f"Raw response: {response}")
+            return {"error": str(e), "raw_response": response}
 
     def predict_mental_health_impacts(
         self,
@@ -647,10 +622,9 @@ class OpenAIClient:
         
         # Make API request
         response = self.complete("impact_generation", messages)
-        response_text = response.content
         
         try:
-            mental_health_impacts = self._validate_json_response(response_text)
+            mental_health_impacts = self._validate_json_response(response)
             # Handle case where the result isn't a list
             if not isinstance(mental_health_impacts, list):
                 if isinstance(mental_health_impacts, dict) and "impacts" in mental_health_impacts:
@@ -660,8 +634,8 @@ class OpenAIClient:
             return mental_health_impacts
         except ValueError as e:
             logger.error(f"Error parsing mental health impacts response: {e}")
-            logger.error(f"Raw response: {response_text}")
-            return [{"error": str(e), "raw_response": response_text}]
+            logger.error(f"Raw response: {response}")
+            return [{"error": str(e), "raw_response": response}]
     
     def calibrate_confidence(
         self,
@@ -725,15 +699,14 @@ Add a "calibration_notes" field explaining your reasoning for any significant ad
         ]
         
         response = self.complete("confidence_calibration", messages)
-        response_text = response.content
         
         try:
-            calibrated_data = self._validate_json_response(response_text)
+            calibrated_data = self._validate_json_response(response)
             return calibrated_data
         except ValueError as e:
             logger.error(f"Error parsing confidence calibration response: {e}")
-            logger.error(f"Raw response: {response_text}")
-            return {"error": str(e), "raw_response": response_text, "original_data": generated_data}
+            logger.error(f"Raw response: {response}")
+            return {"error": str(e), "raw_response": response, "original_data": generated_data}
     
     def extract_mechanism(
         self,
@@ -806,15 +779,14 @@ Format your response as a JSON object with the following structure:
         ]
         
         response = self.complete("mechanism_identification", messages)
-        response_text = response.content
         
         try:
-            mechanism_data = self._validate_json_response(response_text)
+            mechanism_data = self._validate_json_response(response)
             return mechanism_data
         except ValueError as e:
             logger.error(f"Error parsing mechanism extraction response: {e}")
-            logger.error(f"Raw response: {response_text}")
-            return {"error": str(e), "raw_response": response_text}
+            logger.error(f"Raw response: {response}")
+            return {"error": str(e), "raw_response": response}
     
     def get_cost_summary(self) -> Dict:
         """Get summary of API usage costs."""

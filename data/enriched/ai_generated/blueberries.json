@@ -20,7 +20,9 @@
     "omega3": {
       "confidence": 5.0,
       "total_g": 0.028,
-      "dha_mg": 0.0
+      "dha_mg": 0.0,
+      "epa_mg": 0.0,
+      "ala_mg": 0.1
     },
     "iron_mg": 0.34,
     "magnesium_mg": 6.0,
@@ -30,12 +32,23 @@
     "vitamin_e_mg": 0.57,
     "folate_mcg": 6.0,
     "vitamin_b12_mcg": 0.0,
-    "choline_mg": 6.0
+    "choline_mg": 6.0,
+    "tryptophan_mg": 0.0,
+    "confidence_tryptophan_mg": 9,
+    "tyrosine_mg": 0.0,
+    "confidence_tyrosine_mg": 9,
+    "vitamin_d_mcg": 0.0,
+    "confidence_vitamin_d_mcg": 10,
+    "confidence_omega3": {
+      "epa_mg": 10,
+      "ala_mg": 6
+    },
+    "reasoning": "Blueberries are primarily carbohydrate-rich fruits with negligible protein content, thus they do not provide significant amounts of tryptophan or tyrosine. They also lack vitamin D and EPA, as these are not typically found in fruits. Omega-3 ALA is present in trace amounts, as some fruits contain small quantities, but the value is low. Confidence ratings reflect the certainty based on existing nutritional databases and research."
   },
   "data_quality": {
     "completeness": 0.71,
     "overall_confidence": 7,
-    "brain_nutrients_source": "usda_provided",
+    "brain_nutrients_source": "ai_generated",
     "impacts_source": null
   },
   "bioactive_compounds": {},
@@ -43,7 +56,7 @@
   "metadata": {
     "version": "0.1.0",
     "created": "2025-04-27T22:24:17.678443",
-    "last_updated": "2025-04-28T20:36:34.572460",
+    "last_updated": "2025-04-28T22:19:58.495671",
     "source_urls": [
       "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2709275/nutrients"
     ],
