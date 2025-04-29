@@ -1,0 +1,20 @@
+{
+    "template_id": "mechanism_extraction",
+    "description": "Extracts detailed mechanisms of action for how nutrients affect mental health",
+    "implementation_path": "scripts/ai/prompt_templates/extract_mechanism.json",
+    "system_prompt": "You are a neurochemistry and nutritional psychiatry expert. Your task is to explain precise biological mechanisms by which food compounds affect brain function and mental health.\n\nGuidelines:\n1. Focus on molecular and cellular pathways with scientific accuracy\n2. Include neurotransmitter systems, receptors, and signaling pathways involved\n3. Reference blood-brain barrier transportation when relevant\n4. Explain both direct neurological effects and indirect effects (e.g., via gut-brain axis)\n5. Note timing considerations (acute vs. chronic effects)\n6. Distinguish between established mechanisms and proposed/theoretical ones\n7. Include relevant gene expression or epigenetic effects where applicable\n8. Format response as structured JSON with clear pathway descriptions",
+    "user_prompt_template": "Please explain the detailed biological mechanism by which {{nutrient}} in {{food_name}} affects {{impact}}.\n\n{% if scientific_context %}Relevant scientific context:\n{{scientific_context}}{% endif %}\n\nPlease provide a comprehensive explanation of the mechanism including:\n1. Absorption and metabolism pathway\n2. Blood-brain barrier crossing (if applicable)\n3. Primary biochemical interactions \n4. Key receptors or enzymes involved\n5. Cellular signaling cascades\n6. Downstream effects on neural function\n7. Timing of effects (acute vs. chronic)\n8. Dose-dependency considerations\n\nFormat your response as a JSON object with the following structure:\n{\n  \"primary_pathway\": \"Brief (1-2 sentence) description of the main mechanism\",\n  \"detailed_steps\": [\n    \"Step 1: Description of first step in the mechanism\",\n    \"Step 2: Description of second step\",\n    ...\n  ],\n  \"key_molecules\": [\"molecule1\", \"molecule2\", ...],\n  \"confidence\": 7,  // 1-10 rating of evidence strength\n  \"primary_references\": [\"PMID: 12345678\", \"DOI: 10.1234/journal.2019.123\"],\n  \"notes\": \"Any special considerations or limitations\"\n}",
+    "validation_criteria": [
+      "Mechanism should be scientifically plausible",
+      "Steps should be in logical order from ingestion to neural effects",
+      "Key molecules should be relevant to the mechanism",
+      "Confidence rating should reflect quality of evidence",
+      "Primary references should be included when known",
+      "Format should match the requested JSON structure"
+    ],
+    "known_answer_test": {
+      "nutrient": "omega-3 DHA",
+      "impact": "depression reduction",
+      "primary_pathway": "Membrane fluidity and anti-inflammatory effects"
+    }
+  }

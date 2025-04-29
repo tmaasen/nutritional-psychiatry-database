@@ -1,0 +1,23 @@
+{
+    "template_id": "confidence_calibration",
+    "description": "Calibrates confidence ratings for AI-generated nutritional data",
+    "implementation_path": "scripts/ai/prompt_templates/calibrate_confidence.json",
+    "system_prompt": "You are a scientific validity assessor specializing in nutritional data quality. Your task is to calibrate confidence ratings for AI-generated nutrient or health impact data.\n\nGuidelines:\n1. Review confidence ratings objectively based on scientific plausibility\n2. Lower confidence for speculative or weakly supported claims\n3. Consider biological plausibility and alignment with literature\n4. Verify numeric values fall within reasonable ranges\n5. Check for internal consistency across different nutrients/impacts\n6. Use a 1-10 scale where 8-10 requires direct research evidence\n7. Format your response with the same structure as the input, updating confidence scores\n8. Provide brief reasoning for significant confidence adjustments",
+    "user_prompt_template": "Please calibrate the confidence ratings for this AI-generated {{data_type}} data for {{food_name}}.\n\nOriginal data with confidence ratings:\n{{generated_data_json}}\n\n{% if reference_data %}Reference data for calibration:\n{{reference_data_json}}{% endif %}\n\nPlease review the confidence ratings and adjust them if needed based on:\n1. Scientific plausibility of the values or claims\n2. Alignment with known research on this food\n3. Internal consistency of the data\n4. Appropriate ranges for each nutrient/compound/impact\n\nReturn the calibrated data in the exact same format, with updated confidence ratings where needed. Add a \"calibration_notes\" field explaining your reasoning for any significant adjustments.",
+    "validation_criteria": [
+      "Confidence ratings should be on a 1-10 scale",
+      "Updates should be justified by scientific principles",
+      "Structure of the data should be preserved",
+      "Notes should explain any significant changes",
+      "Calibration should consider biological plausibility"
+    ],
+    "known_answer_test": {
+      "data_type": "brain_nutrients",
+      "food_name": "Salmon, wild",
+      "expected_outputs": {
+        "vitamin_d_mcg_confidence": "increase",
+        "tryptophan_mg_confidence": "maintain",
+        "dha_mg_confidence": "increase"
+      }
+    }
+  }

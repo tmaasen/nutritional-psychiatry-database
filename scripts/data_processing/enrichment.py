@@ -313,64 +313,34 @@ class AIEnrichmentEngine:
             logger.error(f"Error parsing nutrient predictions: {e}")
             return {}
     
-    def parse_bioactive_predictions(self, ai_response: str) -> Dict[str, float]:
-        """
-        Parse bioactive compound predictions from AI response.
-        
-        Args:
-            ai_response: Response from AI
-            
-        Returns:
-            Dictionary of bioactive compound predictions
-        """
-        # Use the same parsing logic as for nutrients
-        return self.parse_nutrient_predictions(ai_response)
-    
-    def parse_mental_health_impacts(self, ai_response: str) -> List[Dict]:
-        """
-        Parse mental health impact predictions from AI response.
-        
-        Args:
-            ai_response: Response from AI
-            
-        Returns:
-            List of mental health impact dictionaries
-        """
-        try:
-            # Extract JSON from the response
-            json_start = ai_response.find('[')
-            json_end = ai_response.rfind(']') + 1
-            
-            if json_start == -1 or json_end == 0:
-                logger.warning("No JSON array found in AI response")
-                return []
-            
-            json_str = ai_response[json_start:json_end]
-            impacts = json.loads(json_str)
-            
+    def parse_bioactive_predictions(self, ai_response: Any) -> Dict[str, float]:
+        """Parse bioactive compound predictions from AI response."""
+        # Now ai_response is already a dict, not a string that needs parsing
+        if isinstance(ai_response, dict):
+            # Filter to keep just the numeric fields and remove confidence fields
+            return {k: v for k, v in ai_response.items() 
+                    if isinstance(v, (int, float)) and not k.startswith("confidence_") 
+                    and k != "reasoning"}
+        return {}
+
+    def parse_mental_health_impacts(self, ai_response: Any) -> List[Dict]:
+        """Parse mental health impact predictions from AI response."""
+        # Now ai_response is already a list of impacts, not a string
+        if isinstance(ai_response, list):
             # Validate required fields
             validated_impacts = []
             required_fields = ['impact_type', 'direction', 'mechanism', 'strength', 'confidence']
             
-            for impact in impacts:
+            for impact in ai_response:
                 if all(field in impact for field in required_fields):
-                    # Convert any research citations to proper format
-                    if 'research_citations' in impact and isinstance(impact['research_citations'], list):
-                        impact['research_support'] = [
-                            {'citation': citation} for citation in impact['research_citations']
-                        ]
-                    
                     validated_impacts.append(impact)
                 else:
                     missing = [field for field in required_fields if field not in impact]
                     logger.warning(f"Impact missing required fields: {missing}")
             
             return validated_impacts
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing mental health impacts: {e}")
-            return []
-    
+        return []
+
     def fully_enrich_food(self, food_data: Dict) -> Dict:
         """
         Apply all enrichment steps to a food item.

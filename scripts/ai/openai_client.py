@@ -637,77 +637,6 @@ class OpenAIClient:
             logger.error(f"Raw response: {response}")
             return [{"error": str(e), "raw_response": response}]
     
-    def calibrate_confidence(
-        self,
-        food_name: str,
-        generated_data: Dict,
-        data_type: str,
-        reference_data: Optional[Dict] = None
-    ) -> Dict:
-        """
-        Calibrate confidence ratings for generated data.
-        
-        Args:
-            food_name: Name of the food
-            generated_data: Generated data to calibrate
-            data_type: Type of data (nutrients, bioactives, impacts)
-            reference_data: Optional reference data for calibration
-            
-        Returns:
-            Calibrated data with updated confidence scores
-        """
-        # Construct system prompt
-        system_prompt = """You are a scientific validity assessor specializing in nutritional data quality.
-Your task is to calibrate confidence ratings for AI-generated nutrient or health impact data.
-Follow these guidelines:
-1. Review confidence ratings objectively based on scientific plausibility
-2. Lower confidence for speculative or weakly supported claims
-3. Consider biological plausibility and alignment with literature
-4. Verify numeric values fall within reasonable ranges
-5. Check for internal consistency across different nutrients/impacts
-6. Use a 1-10 scale where 8-10 requires direct research evidence
-7. Format your response with the same structure as the input, updating confidence scores
-8. Provide brief reasoning for significant confidence adjustments"""
-        
-        # Construct user prompt
-        user_prompt = f"""Please calibrate the confidence ratings for this AI-generated {data_type} data for {food_name}.
-
-Original data with confidence ratings:
-{json.dumps(generated_data, indent=2)}
-
-"""
-        if reference_data:
-            user_prompt += f"""
-Reference data for calibration:
-{json.dumps(reference_data, indent=2)}
-"""
-        
-        user_prompt += """
-Please review the confidence ratings and adjust them if needed based on:
-1. Scientific plausibility of the values or claims
-2. Alignment with known research on this food
-3. Internal consistency of the data
-4. Appropriate ranges for each nutrient/compound/impact
-
-Return the calibrated data in the exact same format, with updated confidence ratings where needed. 
-Add a "calibration_notes" field explaining your reasoning for any significant adjustments."""
-        
-        # Make API request
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        response = self.complete("confidence_calibration", messages)
-        
-        try:
-            calibrated_data = self._validate_json_response(response)
-            return calibrated_data
-        except ValueError as e:
-            logger.error(f"Error parsing confidence calibration response: {e}")
-            logger.error(f"Raw response: {response}")
-            return {"error": str(e), "raw_response": response, "original_data": generated_data}
-    
     def extract_mechanism(
         self,
         food_name: str,
@@ -715,78 +644,64 @@ Add a "calibration_notes" field explaining your reasoning for any significant ad
         impact: str,
         scientific_context: Optional[str] = None
     ) -> Dict:
-        """
-        Extract detailed mechanism of action for a nutrient-impact relationship.
+        """Extract detailed mechanism of action for a nutrient-impact relationship."""
+        # Prepare template variables
+        variables = {
+            "food_name": food_name,
+            "nutrient": nutrient,
+            "impact": impact,
+            "scientific_context": scientific_context
+        }
         
-        Args:
-            food_name: Name of the food
-            nutrient: Nutrient name
-            impact: Mental health impact
-            scientific_context: Optional scientific context
-            
-        Returns:
-            Dictionary with detailed mechanism information
-        """
-        # Construct system prompt
-        system_prompt = """You are a neurochemistry and nutritional psychiatry expert.
-Your task is to explain precise biological mechanisms by which food compounds affect brain function and mental health.
-Follow these guidelines:
-1. Focus on molecular and cellular pathways with scientific accuracy
-2. Include neurotransmitter systems, receptors, and signaling pathways involved
-3. Reference blood-brain barrier transportation when relevant
-4. Explain both direct neurological effects and indirect effects (e.g., via gut-brain axis)
-5. Note timing considerations (acute vs. chronic effects)
-6. Distinguish between established mechanisms and proposed/theoretical ones
-7. Include relevant gene expression or epigenetic effects where applicable
-8. Format response as structured JSON with clear pathway descriptions"""
-        
-        # Construct user prompt
-        user_prompt = f"""Please explain the detailed biological mechanism by which {nutrient} in {food_name} affects {impact}.
-
-"""
-        if scientific_context:
-            user_prompt += f"\nRelevant scientific context:\n{scientific_context}\n"
-        
-        user_prompt += """
-Please provide a comprehensive explanation of the mechanism including:
-1. Absorption and metabolism pathway
-2. Blood-brain barrier crossing (if applicable)
-3. Primary biochemical interactions 
-4. Key receptors or enzymes involved
-5. Cellular signaling cascades
-6. Downstream effects on neural function
-7. Timing of effects (acute vs. chronic)
-8. Dose-dependency considerations
-
-Format your response as a JSON object with the following structure:
-{
-  "primary_pathway": "Brief (1-2 sentence) description of the main mechanism",
-  "detailed_steps": [
-    "Step 1: Description of first step in the mechanism",
-    "Step 2: Description of second step",
-    ...
-  ],
-  "key_molecules": ["molecule1", "molecule2", ...],
-  "confidence": 7,  // 1-10 rating of evidence strength
-  "primary_references": ["PMID: 12345678", "DOI: 10.1234/journal.2019.123"],
-  "notes": "Any special considerations or limitations"
-}"""
+        # Create messages from template
+        messages = self.create_messages_from_template("mechanism_extraction", variables)
         
         # Make API request
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
         response = self.complete("mechanism_identification", messages)
         
         try:
-            mechanism_data = self._validate_json_response(response)
-            return mechanism_data
+            if hasattr(response, 'output') and hasattr(response.output, 'content'):
+                mechanism_data = self._validate_json_response(response.output.content)
+                return mechanism_data
+            else:
+                # Direct JSON return since we're using JSON mode
+                return response
         except ValueError as e:
             logger.error(f"Error parsing mechanism extraction response: {e}")
-            logger.error(f"Raw response: {response}")
-            return {"error": str(e), "raw_response": response}
+            return {"error": str(e), "raw_response": str(response)}
+
+    def calibrate_confidence(
+        self,
+        food_name: str,
+        generated_data: Dict,
+        data_type: str,
+        reference_data: Optional[Dict] = None
+    ) -> Dict:
+        """Calibrate confidence ratings for generated data."""
+        # Prepare template variables
+        variables = {
+            "food_name": food_name,
+            "data_type": data_type,
+            "generated_data_json": generated_data,
+            "reference_data_json": reference_data
+        }
+        
+        # Create messages from template
+        messages = self.create_messages_from_template("confidence_calibration", variables)
+        
+        # Make API request
+        response = self.complete("confidence_calibration", messages)
+        
+        try:
+            if hasattr(response, 'output') and hasattr(response.output, 'content'):
+                calibrated_data = self._validate_json_response(response.output.content)
+                return calibrated_data
+            else:
+                # Direct JSON return since we're using JSON mode
+                return response
+        except ValueError as e:
+            logger.error(f"Error parsing confidence calibration response: {e}")
+            return {"error": str(e), "raw_response": str(response), "original_data": generated_data}
     
     def get_cost_summary(self) -> Dict:
         """Get summary of API usage costs."""
