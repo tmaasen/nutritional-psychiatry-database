@@ -271,8 +271,8 @@ class DataValidator:
 def main():
     """Main function to execute validation."""
     parser = argparse.ArgumentParser(description="Validate Nutritional Psychiatry Dataset files")
-    parser.add_argument("--input-dir", required=True, help="Directory with food data files")
-    parser.add_argument("--schema", default="schema/food_schema.json", help="Path to JSON schema")
+    parser.add_argument("--input-dir", default=os.path.join("data", "enriched", "ai_generated"), help="Directory with food data files")
+    parser.add_argument("--schema", default="schema/schema.json", help="Path to JSON schema")
     parser.add_argument("--report", help="Path to save validation report")
     parser.add_argument("--file", help="Validate a specific file only")
     
