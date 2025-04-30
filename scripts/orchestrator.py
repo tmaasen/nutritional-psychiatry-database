@@ -14,42 +14,55 @@ Run this script to process foods through the entire pipeline or specific steps.
 """
 
 import os
-import sys
 import json
-import logging
-import argparse
-import subprocess
 import time
-from typing import List, Dict, Optional
+import logging
+from typing import List, Dict, Optional, Callable, Any
+from config import get_config, Config
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("nutritional_psychiatry_dataset.log"),
-        logging.StreamHandler()
-    ]
+# Import utility modules
+from utils import (
+    setup_logging,
+    load_json,
+    save_json,
+    ensure_directory,
+    load_dotenv,
+    get_env,
+    load_config,
+    create_project_dirs,
+    get_project_dirs
 )
-logger = logging.getLogger(__name__)
+
+# Import processing modules - direct imports from each script
+from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
+from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
+from scripts.data_collection.literature_extract import LiteratureExtractor
+from scripts.data_processing.transform import USDADataTransformer
+from scripts.data_processing.enrichment import AIEnrichmentEngine
+from scripts.data_processing.validation import DataValidator
+from scripts.ai.confidence_calibration_system import ConfidenceCalibrationSystem
+from scripts.data_processing.food_source_prioritization import SourcePrioritizer
+
+# Initialize logger
+logger = setup_logging(__name__, log_file="nutritional_psychiatry_dataset.log")
 
 class DatasetOrchestrator:
     """Orchestrates the end-to-end process of building the Nutritional Psychiatry Dataset."""
-    
+
     def __init__(
         self,
         config_file: Optional[str] = None,
         api_keys: Optional[Dict[str, str]] = None,
         food_list: Optional[List[str]] = None,
-        output_dir: str = "data",
+        output_dir: str = None,
         skip_steps: Optional[List[str]] = None,
         only_steps: Optional[List[str]] = None,
-        batch_size: int = 10,
-        force_reprocess: bool = False
+        batch_size: int = None,
+        force_reprocess: bool = None
     ):
         """
         Initialize the orchestrator.
-        
+
         Args:
             config_file: Path to configuration file
             api_keys: Dictionary of API keys
@@ -60,59 +73,65 @@ class DatasetOrchestrator:
             batch_size: Number of foods to process in each batch
             force_reprocess: Whether to reprocess existing files
         """
-        self.config = self._load_config(config_file)
-        self.api_keys = api_keys or {}
+        # Load configuration
+        self.config = get_config(config_file)
+        
+        # Override config with arguments if provided
+        self.api_keys = api_keys or self.config.api_keys
         self.food_list = food_list or []
-        self.output_dir = output_dir
+        self.output_dir = output_dir or self.config.data_dir
         self.skip_steps = skip_steps or []
         self.only_steps = only_steps
-        self.batch_size = batch_size
-        self.force_reprocess = force_reprocess
+        self.batch_size = batch_size or self.config.processing["batch_size"]
+        self.force_reprocess = force_reprocess if force_reprocess is not None else self.config.processing["force_reprocess"]
         
         # Set up directories
-        self.directories = {
-            "usda_raw": os.path.join(output_dir, "raw", "usda_foods"),
-            "off_raw": os.path.join(output_dir, "raw", "openfoodfacts"),
-            "literature_raw": os.path.join(output_dir, "raw", "literature"),
-            "manual_entries": os.path.join(output_dir, "raw", "manual_entries"),
-            "processed": os.path.join(output_dir, "processed", "base_foods"),
-            "ai_generated": os.path.join(output_dir, "enriched", "ai_generated"),
-            "evaluation": os.path.join(output_dir, "evaluation"),
-            "calibrated": os.path.join(output_dir, "enriched", "calibrated"),
-            "merged": os.path.join(output_dir, "enriched", "merged"),
-            "final": os.path.join(output_dir, "final")
-        }
-        
-        # Create directories
-        for directory in self.directories.values():
-            os.makedirs(directory, exist_ok=True)
+        self.directories = self.config.dirs
         
         # Validate required API keys
         self._validate_api_keys()
-    
-    def _load_config(self, config_file: Optional[str]) -> Dict:
-        """Load configuration file."""
-        if not config_file or not os.path.exists(config_file):
-            logger.info("No configuration file provided or file not found. Using defaults.")
-            return {}
         
-        try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-            logger.info(f"Loaded configuration from {config_file}")
-            return config
-        except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
-            return {}
+        # Initialize step tracking
+        self.completed_steps = set()
     
     def _validate_api_keys(self):
         """Validate required API keys are present."""
         required_keys = ["USDA_API_KEY", "OPENAI_API_KEY"]
+        
+        # First check the passed API keys
+        if self.api_keys:
+            for key in required_keys:
+                if key not in self.api_keys or not self.api_keys[key]:
+                    # Try to get from environment
+                    self.api_keys[key] = get_env(key)
+        else:
+            # Initialize from environment
+            self.api_keys = {key: get_env(key) for key in required_keys}
+        
+        # Check if any keys are still missing
         missing_keys = [key for key in required_keys if key not in self.api_keys or not self.api_keys[key]]
         
         if missing_keys:
             logger.warning(f"Missing required API keys: {', '.join(missing_keys)}")
             logger.warning("Some functionality may be limited")
+    
+    def _initialize_processors(self):
+        """Initialize all data processors and API clients."""
+        # Initialize API clients
+        self.usda_client = USDAFoodDataCentralAPI(api_key=self.api_keys.get("USDA_API_KEY"))
+        self.off_client = OpenFoodFactsAPI()
+        
+        # Initialize processors
+        schema_path = os.path.join("schema", "schema.json")
+        self.transformer = USDADataTransformer(schema_path)
+        self.enricher = AIEnrichmentEngine(api_key=self.api_keys.get("OPENAI_API_KEY"))
+        self.validator = DataValidator(schema_path)
+        self.calibrator = ConfidenceCalibrationSystem(
+            evaluation_dir=self.directories["evaluation"],
+            dataset_dir=self.directories["ai_generated"],
+            output_dir=self.directories["calibrated"]
+        )
+        self.prioritizer = SourcePrioritizer()
     
     def _should_run_step(self, step_name: str) -> bool:
         """Determine if a step should be run based on skip_steps and only_steps."""
@@ -121,263 +140,301 @@ class DatasetOrchestrator:
         else:
             return step_name not in self.skip_steps
     
-    def run_step(self, step_name: str, command: List[str], env: Optional[Dict[str, str]] = None) -> bool:
+    def run_step(
+        self, 
+        step_name: str, 
+        step_func: Callable[[], Any], 
+        dependencies: Optional[List[str]] = None
+    ) -> Any:
         """
-        Run a step by executing a command.
+        Run a step by calling a function directly.
         
         Args:
             step_name: Name of the step
-            command: Command to execute
-            env: Environment variables for the command
+            step_func: Function to call
+            dependencies: List of step names that must complete before this step
             
         Returns:
-            True if successful, False otherwise
+            Return value from the step function
         """
+        # Check if step should be run
         if not self._should_run_step(step_name):
             logger.info(f"Skipping step: {step_name}")
-            return True
+            return None
+        
+        # Check dependencies
+        if dependencies:
+            missing_deps = [dep for dep in dependencies if dep not in self.completed_steps]
+            if missing_deps:
+                logger.error(f"Cannot run {step_name}: missing dependencies {missing_deps}")
+                return None
         
         logger.info(f"Running step: {step_name}")
-        logger.info(f"Command: {' '.join([str(item) for item in command])}")
-        
-        # Prepare environment
-        cmd_env = os.environ.copy()
-        if env:
-            cmd_env.update(env)
-        
-        # Handle API keys
-        for key, value in self.api_keys.items():
-            cmd_env[key] = value
         
         try:
             start_time = time.time()
-            logger.debug(f"Command structure: {[(type(item), item) for item in command]}")
-            process = subprocess.run(
-                command,
-                env=cmd_env,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
+            result = step_func()
             end_time = time.time()
             
-            # Log output
+            # Log completion
             logger.info(f"Step {step_name} completed in {end_time - start_time:.2f} seconds")
-            if process.stdout:
-                logger.debug(f"Output: {process.stdout}")
             
-            return True
+            # Mark as completed
+            self.completed_steps.add(step_name)
             
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Error running step {step_name}: {e}")
-            logger.error(f"Command output: {e.stdout}")
-            logger.error(f"Command error: {e.stderr}")
-            return False
+            return result
+            
         except Exception as e:
-            logger.error(f"Unexpected error running step {step_name}: {e}")
-            return False
+            logger.error(f"Error running step {step_name}: {e}", exc_info=True)
+            return None
     
-    def collect_usda_data(self) -> bool:
+    def collect_usda_data(self) -> List[str]:
         """Collect food data from USDA FoodData Central."""
         step_name = "usda_data_collection"
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/data_collection/usda_api.py",
-            "--output-dir", str(self.directories["usda_raw"])
-        ]
+        def execute():
+            saved_files = []
+            
+            # Use the first food if list provided
+            if self.food_list:
+                food_query = self.food_list[0]
+                if isinstance(food_query, dict):
+                    food_query = food_query.get("name", str(food_query))
+                
+                # Search for the food
+                search_results = self.usda_client.search_foods(food_query)
+                
+                if search_results.get("foods"):
+                    # Get the first result
+                    fdc_id = search_results["foods"][0]["fdcId"]
+                    
+                    # Get detailed food data
+                    food_details = self.usda_client.get_food_details(fdc_id)
+                    
+                    # Save to file
+                    filename = f"{food_query.lower().replace(' ', '_')}.json"
+                    file_path = os.path.join(self.directories["usda_raw"], filename)
+                    
+                    save_json(food_details, file_path)
+                    saved_files.append(file_path)
+            else:
+                # For demo purposes, fetch a default set of foods
+                # This would be expanded in the real implementation
+                default_foods = ["blueberries", "salmon", "spinach", "walnuts", "yogurt"]
+                
+                for food in default_foods:
+                    search_results = self.usda_client.search_foods(food)
+                    
+                    if search_results.get("foods"):
+                        fdc_id = search_results["foods"][0]["fdcId"]
+                        food_details = self.usda_client.get_food_details(fdc_id)
+                        
+                        filename = f"{food.lower().replace(' ', '_')}.json"
+                        file_path = os.path.join(self.directories["usda_raw"], filename)
+                        
+                        save_json(food_details, file_path)
+                        saved_files.append(file_path)
+            
+            return saved_files
         
-        # Add food list if provided
-        if self.food_list:
-            # Make sure we're using a string, not a dict
-            food_query = self.food_list[0]
-            if isinstance(food_query, dict):
-                # If it's a dictionary, extract the name field
-                food_query = food_query.get("name", str(food_query))
-            command.extend(["--query", str(food_query)])
-        
-        # Set environment
-        env = {"USDA_API_KEY": self.api_keys.get("USDA_API_KEY", "")}
-        
-        return self.run_step(step_name, command, env)
+        return self.run_step(step_name, execute)
     
-    def collect_openfoodfacts_data(self) -> bool:
+    def collect_openfoodfacts_data(self) -> List[str]:
         """Collect food data from OpenFoodFacts."""
         step_name = "openfoodfacts_data_collection"
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/data_collection/openfoodfacts_api.py",
-            "--output-dir", self.directories["off_raw"]
-        ]
+        def execute():
+            saved_files = []
+            
+            # Use the first food if list provided
+            if self.food_list:
+                food_query = self.food_list[0]
+                if isinstance(food_query, dict):
+                    food_query = food_query.get("name", str(food_query))
+                
+                # Get OpenFoodFacts data
+                saved_files = self.off_client.search_and_save(
+                    query=food_query,
+                    output_dir=self.directories["off_raw"],
+                    limit=5  # Limit to 5 results
+                )
+            else:
+                # For demo purposes, fetch a default set of foods
+                default_foods = ["blueberries", "salmon", "spinach", "walnuts", "yogurt"]
+                
+                for food in default_foods:
+                    saved_paths = self.off_client.search_and_save(
+                        query=food,
+                        output_dir=self.directories["off_raw"],
+                        limit=2  # Limit to 2 results per food
+                    )
+                    saved_files.extend(saved_paths)
+            
+            return saved_files
         
-        # Add food list if provided
-        if self.food_list:
-            # Make sure we're using a string, not a dict
-            food_query = self.food_list[0]
-            if isinstance(food_query, dict):
-                # If it's a dictionary, extract the name field
-                food_query = food_query.get("name", str(food_query))
-            command.extend(["--query", str(food_query)])
-            command.extend(["--limit", "5"])  # Limit to 5 results per food
-        
-        return self.run_step(step_name, command)
+        return self.run_step(step_name, execute)
     
-    def collect_literature_data(self) -> bool:
+    def collect_literature_data(self) -> List[str]:
         """Extract food-mood relationships from literature."""
         step_name = "literature_data_collection"
         
-        # Check if literature sources are defined
-        literature_sources = self.config.get("literature_sources", [])
-        if not literature_sources:
-            logger.warning("No literature sources defined. Skipping literature data collection.")
-            return True
+        def execute():
+            saved_files = []
+            
+            # Check if literature sources are defined
+            literature_sources = self.config.get("literature_sources", [])
+            if not literature_sources:
+                logger.warning("No literature sources defined. Skipping literature data collection.")
+                return []
+            
+            # Initialize literature extractor
+            extractor = LiteratureExtractor(output_dir=self.directories["literature_raw"])
+            
+            # Process each literature source
+            for source in literature_sources:
+                if source.get("type") == "pdf":
+                    # Process PDF file
+                    relationships, schema_data = extractor.process_pdf(source.get("path", ""))
+                    if schema_data:
+                        saved_files.append(source.get("path", ""))
+                elif source.get("type") == "url":
+                    # Process web page
+                    relationships, schema_data = extractor.process_url(source.get("url", ""))
+                    if schema_data:
+                        saved_files.append(source.get("url", ""))
+            
+            return saved_files
         
-        # For each literature source
-        success = True
-        for source in literature_sources:
-            if source.get("type") == "pdf":
-                command = [
-                    sys.executable, 
-                    "scripts/data_collection/literature_extract.py",
-                    "--input", source.get("path", ""),
-                    "--output-dir", self.directories["literature_raw"]
-                ]
-                
-                source_success = self.run_step(
-                    f"{step_name}_{os.path.basename(source.get('path', 'unknown'))}",
-                    command
-                )
-                success = success and source_success
-        
-        return success
+        return self.run_step(step_name, execute)
     
-    def transform_data(self) -> bool:
+    def transform_data(self) -> List[str]:
         """Transform raw data to our schema format."""
         step_name = "data_transformation"
+        dependencies = ["usda_data_collection"]
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/data_processing/transform.py",
-            "--input-dir", self.directories["usda_raw"],
-            "--output-dir", self.directories["processed"]
-        ]
+        def execute():
+            # Process all USDA files
+            return self.transformer.process_directory(
+                input_dir=self.directories["usda_raw"],
+                output_dir=self.directories["processed"]
+            )
         
-        return self.run_step(step_name, command)
+        return self.run_step(step_name, execute, dependencies)
     
-    def enrich_with_ai(self) -> bool:
+    def enrich_with_ai(self) -> List[str]:
         """Enrich food data with AI-generated predictions."""
         step_name = "ai_enrichment"
+        dependencies = ["data_transformation"]
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/data_processing/enrichment.py",
-            "--input-dir", self.directories["processed"],
-            "--output-dir", self.directories["ai_generated"],
-            "--model", self.config.get("ai", {}).get("model", "gpt-4o-mini")
-        ]
+        def execute():
+            # Apply AI enrichment to processed files
+            return self.enricher.enrich_directory(
+                input_dir=self.directories["processed"],
+                output_dir=self.directories["ai_generated"],
+                limit=self.batch_size if self.batch_size > 0 else None
+            )
         
-        # Set environment
-        env = {"OPENAI_API_KEY": self.api_keys.get("OPENAI_API_KEY", "")}
-        
-        # Add limit if batch size is defined
-        if self.batch_size > 0:
-            command.extend(["--limit", str(self.batch_size)])
-        
-        return self.run_step(step_name, command, env)
+        return self.run_step(step_name, execute, dependencies)
     
-    def validate_with_known_answers(self) -> bool:
+    def validate_with_known_answers(self) -> Dict:
         """Validate AI-generated predictions against known reference values."""
         step_name = "known_answer_testing"
+        dependencies = ["ai_enrichment"]
         
-        # Check if reference data exists
-        reference_dir = os.path.join(self.output_dir, "reference")
-        if not os.path.exists(reference_dir) or not os.listdir(reference_dir):
-            logger.warning("No reference data found. Skipping validation.")
-            return True
+        def execute():
+            # Check if reference data exists
+            reference_dir = self.directories["reference"]
+            if not os.path.exists(reference_dir) or not os.listdir(reference_dir):
+                logger.warning("No reference data found. Skipping validation.")
+                return {}
+            
+            # Load test foods
+            test_foods_path = os.path.join(self.output_dir, "test_foods.json")
+            if not os.path.exists(test_foods_path):
+                logger.warning(f"Test foods file {test_foods_path} not found.")
+                return {}
+            
+            test_foods = load_json(test_foods_path)
+            
+            # Initialize tester
+            from scripts.ai.known_answer_tester import KnownAnswerTester
+            from scripts.ai.openai_client import OpenAIClient
+            
+            openai_client = OpenAIClient(api_key=self.api_keys.get("OPENAI_API_KEY"))
+            
+            tester = KnownAnswerTester(
+                openai_client=openai_client,
+                reference_data_dir=reference_dir,
+                output_dir=self.directories["evaluation"]
+            )
+            
+            # Run test suite
+            return tester.run_test_suite(test_foods)
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/ai/known_answer_tester.py",
-            "--reference-dir", reference_dir,
-            "--output-dir", self.directories["evaluation"],
-            "--food-list", os.path.join(self.output_dir, "test_foods.json")
-        ]
-        
-        # Set environment
-        env = {"OPENAI_API_KEY": self.api_keys.get("OPENAI_API_KEY", "")}
-        
-        return self.run_step(step_name, command, env)
+        return self.run_step(step_name, execute, dependencies)
     
-    def calibrate_confidence(self) -> bool:
+    def calibrate_confidence(self) -> Dict:
         """Calibrate confidence ratings based on validation results."""
         step_name = "confidence_calibration"
+        dependencies = ["ai_enrichment"]
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/ai/confidence_calibration_system.py",
-            "--evaluation-dir", self.directories["evaluation"],
-            "--dataset-dir", self.directories["ai_generated"],
-            "--output-dir", self.directories["calibrated"]
-        ]
+        def execute():
+            # Initialize calibrator from above
+            # Calibrate dataset
+            self.calibrator.calibrate_dataset()
+            
+            # Return summary
+            return {"status": "completed"}
         
-        return self.run_step(step_name, command)
+        return self.run_step(step_name, execute, dependencies)
     
-    def merge_sources(self) -> bool:
+    def merge_sources(self) -> List[str]:
         """Merge data from different sources with intelligent prioritization."""
         step_name = "source_prioritization"
+        dependencies = ["data_transformation"]
         
-        # Build command
-        command = [
-            sys.executable, 
-            "scripts/data_processing/food_source_prioritization.py",
-            "--usda-dir", self.directories["processed"],
-            "--openfoodfacts-dir", self.directories["off_raw"],
-            "--output-dir", self.directories["merged"]
-        ]
+        def execute():
+            # Determine AI directory based on calibration
+            ai_dir = self.directories["calibrated"] if "confidence_calibration" in self.completed_steps else self.directories["ai_generated"]
+            
+            # Check if literature directory contains files
+            lit_dir = None
+            if os.path.exists(self.directories["literature_raw"]) and os.listdir(self.directories["literature_raw"]):
+                lit_dir = self.directories["literature_raw"]
+            
+            # Merge directories
+            return self.prioritizer.merge_directory(
+                usda_dir=self.directories["processed"],
+                openfoodfacts_dir=self.directories["off_raw"],
+                literature_dir=lit_dir,
+                ai_dir=ai_dir,
+                output_dir=self.directories["merged"]
+            )
         
-        # Add literature directory if it contains files
-        if os.path.exists(self.directories["literature_raw"]) and os.listdir(self.directories["literature_raw"]):
-            command.extend(["--literature-dir", self.directories["literature_raw"]])
-        
-        # Add AI directory if confidence calibration was not run
-        if not self._should_run_step("confidence_calibration"):
-            command.extend(["--ai-dir", self.directories["ai_generated"]])
-        else:
-            command.extend(["--ai-dir", self.directories["calibrated"]])
-        
-        return self.run_step(step_name, command)
+        return self.run_step(step_name, execute, dependencies)
     
-    def prepare_final_dataset(self) -> bool:
+    def prepare_final_dataset(self) -> List[str]:
         """Prepare the final dataset for use."""
         step_name = "final_preparation"
+        dependencies = ["source_prioritization"]
         
-        # For the POC, we'll simply copy the merged files to the final directory
-        command = ["cp", "-r", os.path.join(self.directories["merged"], "*.json"), self.directories["final"]]
-        
-        # Use platform-agnostic file copying
-        if sys.platform == "win32":
+        def execute():
+            # For the POC, simply copy merged files to final directory
             import shutil
-            try:
-                for file in os.listdir(self.directories["merged"]):
-                    if file.endswith(".json"):
-                        shutil.copy(
-                            os.path.join(self.directories["merged"], file),
-                            os.path.join(self.directories["final"], file)
-                        )
-                return True
-            except Exception as e:
-                logger.error(f"Error copying final dataset: {e}")
-                return False
-        else:
-            return self.run_step(step_name, command)
+            
+            final_files = []
+            
+            for file in os.listdir(self.directories["merged"]):
+                if file.endswith(".json"):
+                    source_path = os.path.join(self.directories["merged"], file)
+                    dest_path = os.path.join(self.directories["final"], file)
+                    
+                    shutil.copy(source_path, dest_path)
+                    final_files.append(dest_path)
+            
+            return final_files
+        
+        return self.run_step(step_name, execute, dependencies)
     
     def run_all(self) -> bool:
         """Run the complete data processing pipeline."""
@@ -385,22 +442,28 @@ class DatasetOrchestrator:
         start_time = time.time()
         
         steps = [
-            ("Step 1: USDA Data Collection", self.collect_usda_data),
-            ("Step 2: OpenFoodFacts Data Collection", self.collect_openfoodfacts_data),
-            ("Step 3: Literature Data Extraction", self.collect_literature_data),
-            ("Step 4: Data Transformation", self.transform_data),
-            ("Step 5: AI Enrichment", self.enrich_with_ai),
-            ("Step 6: Known Answer Testing", self.validate_with_known_answers),
-            ("Step 7: Confidence Calibration", self.calibrate_confidence),
-            ("Step 8: Source Prioritization & Merging", self.merge_sources),
-            ("Step 9: Final Dataset Preparation", self.prepare_final_dataset)
+            ("Step 1: USDA Data Collection", self.collect_usda_data, []),
+            ("Step 2: OpenFoodFacts Data Collection", self.collect_openfoodfacts_data, []),
+            ("Step 3: Literature Data Extraction", self.collect_literature_data, []),
+            ("Step 4: Data Transformation", self.transform_data, ["usda_data_collection"]),
+            ("Step 5: AI Enrichment", self.enrich_with_ai, ["data_transformation"]),
+            ("Step 6: Known Answer Testing", self.validate_with_known_answers, ["ai_enrichment"]),
+            ("Step 7: Confidence Calibration", self.calibrate_confidence, ["ai_enrichment"]),
+            ("Step 8: Source Prioritization & Merging", self.merge_sources, ["data_transformation"]),
+            ("Step 9: Final Dataset Preparation", self.prepare_final_dataset, ["source_prioritization"])
         ]
         
         failures = []
-        for step_desc, step_func in steps:
+        for step_desc, step_func, dependencies in steps:
             logger.info(f"=== {step_desc} ===")
-            success = step_func()
-            if not success:
+            
+            # Extract step name from description
+            step_name = step_desc.split(":", 1)[1].strip().lower().replace(" ", "_")
+            
+            # Run step
+            result = self.run_step(step_name, step_func, dependencies)
+            
+            if result is None:
                 failures.append(step_desc)
                 if not self.config.get("continue_on_failure", False):
                     logger.error(f"Pipeline stopped due to failure in {step_desc}")
@@ -422,40 +485,44 @@ class DatasetOrchestrator:
         print("This tool will guide you through generating the dataset step by step.")
         
         steps = [
-            ("Collect USDA Food Data", self.collect_usda_data),
-            ("Collect OpenFoodFacts Data", self.collect_openfoodfacts_data),
-            ("Extract Literature Data", self.collect_literature_data),
-            ("Transform Data to Schema", self.transform_data),
-            ("Enrich with AI Predictions", self.enrich_with_ai),
-            ("Validate with Known Answers", self.validate_with_known_answers),
-            ("Calibrate Confidence Ratings", self.calibrate_confidence),
-            ("Merge Data Sources", self.merge_sources),
-            ("Prepare Final Dataset", self.prepare_final_dataset)
+            ("Collect USDA Food Data", self.collect_usda_data, []),
+            ("Collect OpenFoodFacts Data", self.collect_openfoodfacts_data, []),
+            ("Extract Literature Data", self.collect_literature_data, []),
+            ("Transform Data to Schema", self.transform_data, ["collect_usda_food_data"]),
+            ("Enrich with AI Predictions", self.enrich_with_ai, ["transform_data_to_schema"]),
+            ("Validate with Known Answers", self.validate_with_known_answers, ["enrich_with_ai_predictions"]),
+            ("Calibrate Confidence Ratings", self.calibrate_confidence, ["enrich_with_ai_predictions"]),
+            ("Merge Data Sources", self.merge_sources, ["transform_data_to_schema"]),
+            ("Prepare Final Dataset", self.prepare_final_dataset, ["merge_data_sources"])
         ]
         
-        for i, (step_desc, step_func) in enumerate(steps, 1):
+        for i, (step_desc, step_func, dependencies) in enumerate(steps, 1):
             print(f"\nStep {i}/{len(steps)}: {step_desc}")
             
-            if not self._should_run_step(step_desc):
+            # Convert to step name format
+            step_name = step_desc.lower().replace(" ", "_")
+            
+            if not self._should_run_step(step_name):
                 print("  Skipping this step based on configuration.")
                 continue
             
             proceed = input("  Proceed with this step? (Y/n): ").strip().lower()
             if proceed in ("", "y", "yes"):
                 print(f"  Running {step_desc}...")
-                success = step_func()
-                if success:
+                result = self.run_step(step_name, step_func, dependencies)
+                
+                if result is not None:
                     print(f"  ✓ {step_desc} completed successfully.")
                 else:
                     print(f"  ✗ {step_desc} failed.")
                     retry = input("  Retry this step? (y/N): ").strip().lower()
                     if retry in ("y", "yes"):
                         print(f"  Retrying {step_desc}...")
-                        success = step_func()
-                        if not success:
+                        result = self.run_step(step_name, step_func, dependencies)
+                        if result is None:
                             print(f"  ✗ {step_desc} failed again.")
                     
-                    if not success and not self.config.get("continue_on_failure", False):
+                    if result is None and not self.config.get("continue_on_failure", False):
                         proceed = input("  Continue despite failure? (y/N): ").strip().lower()
                         if proceed not in ("y", "yes"):
                             print("\nExiting due to step failure.")
@@ -465,15 +532,17 @@ class DatasetOrchestrator:
         
         print("\nDataset generation process complete.")
 
-
 def main():
     """Main function to execute the orchestrator."""
+    import argparse
+    
     parser = argparse.ArgumentParser(description="Nutritional Psychiatry Dataset Orchestrator")
     parser.add_argument("--config", help="Path to configuration file")
     parser.add_argument("--usda-key", help="USDA API key")
     parser.add_argument("--openai-key", help="OpenAI API key")
     parser.add_argument("--food", action="append", help="Food to process (can be used multiple times)")
-    parser.add_argument("--food-list", help="Path to JSON file with list of foods", default=os.path.join("docs", "examples", "test_food.json"))
+    parser.add_argument("--food-list", help="Path to JSON file with list of foods", 
+                       default=os.path.join("docs", "examples", "test_food.json"))
     parser.add_argument("--output-dir", default="data", help="Base directory for all data")
     parser.add_argument("--skip", action="append", help="Steps to skip (can be used multiple times)")
     parser.add_argument("--only", action="append", help="Only run these steps (can be used multiple times)")
@@ -489,19 +558,14 @@ def main():
         food_list = args.food
     elif args.food_list and os.path.exists(args.food_list):
         try:
-            with open(args.food_list, 'r') as f:
-                food_data = json.load(f)
-                if isinstance(food_data, list):
-                    food_list = food_data
-                elif isinstance(food_data, dict) and "foods" in food_data:
-                    food_list = food_data["foods"]
+            food_list = load_json(args.food_list)
         except Exception as e:
             logger.error(f"Error loading food list: {e}")
     
     # Set up API keys
     api_keys = {
-        "USDA_API_KEY": args.usda_key or os.environ.get("USDA_API_KEY", ""),
-        "OPENAI_API_KEY": args.openai_key or os.environ.get("OPENAI_API_KEY", "")
+        "USDA_API_KEY": args.usda_key or get_env("USDA_API_KEY", ""),
+        "OPENAI_API_KEY": args.openai_key or get_env("OPENAI_API_KEY", "")
     }
     
     # Create orchestrator

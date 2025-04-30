@@ -17,6 +17,7 @@ import time
 import requests
 from typing import Dict, List, Any, Optional
 import logging
+from config import get_config
 
 # Configure logging
 logging.basicConfig(
@@ -27,14 +28,15 @@ logger = logging.getLogger(__name__)
 
 class USDAFoodDataCentralAPI:
     """Client for the USDA FoodData Central API."""
-    
-    BASE_URL = "https://api.nal.usda.gov/fdc/v1"
-    
+        
     def __init__(self, api_key: str = None):
         """Initialize the API client with an API key."""
-        self.api_key = api_key or os.environ.get("USDA_API_KEY")
+        config = get_config()
+        self.api_key = api_key or config.get_api_key("USDA")
+        self.base_url = config.get_api_url("USDA")
+        
         if not self.api_key:
-            raise ValueError("USDA API key is required. Set it as an argument or as USDA_API_KEY environment variable.")
+            raise ValueError("USDA API key is required. Set it in .env file or pass as argument.")
     
     def _make_request(self, endpoint: str, params: Dict = None) -> Dict:
         """Make a request to the API with proper error handling and rate limiting."""
@@ -43,7 +45,7 @@ class USDAFoodDataCentralAPI:
         
         params['api_key'] = self.api_key
         
-        url = f"{self.BASE_URL}/{endpoint}"
+        url = f"{self.base_url}/{endpoint}"
         
         try:
             response = requests.get(url, params=params)
@@ -115,7 +117,7 @@ class USDAFoodDataCentralAPI:
         Returns:
             List of dictionaries containing detailed food information
         """
-        url = f"{self.BASE_URL}/foods"
+        url = f"{self.base_url}/foods"
         params = {'api_key': self.api_key, 'format': format}
         
         try:
