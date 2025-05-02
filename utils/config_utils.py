@@ -6,7 +6,7 @@ Configuration utilities for the Nutritional Psychiatry Dataset project.
 import os
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 
 # Initialize logger
@@ -51,6 +51,39 @@ def get_env(key: str, default: Any = None) -> Any:
     return os.environ.get(key, default)
 
 
+def get_db_config() -> Dict[str, Any]:
+    """
+    Get database configuration from environment variables.
+    
+    Returns:
+        Dictionary containing database configuration
+    """
+    return {
+        "host": get_env("DB_HOST"),
+        "port": get_env("DB_PORT", "5432"),
+        "database": get_env("DB_NAME"),
+        "user": get_env("DB_USER"),
+        "password": get_env("DB_PASSWORD"),
+        "sslmode": get_env("DB_SSLMODE", "require"),
+        "min_connections": int(get_env("DB_MIN_CONNECTIONS", "1")),
+        "max_connections": int(get_env("DB_MAX_CONNECTIONS", "10"))
+    }
+
+
+def get_api_config() -> Dict[str, Any]:
+    """
+    Get API configuration from environment variables.
+    
+    Returns:
+        Dictionary containing API configuration
+    """
+    return {
+        "usda_api_key": get_env("USDA_API_KEY"),
+        "openfoodfacts_api_key": get_env("OPENFOODFACTS_API_KEY"),
+        "openai_api_key": get_env("OPENAI_API_KEY")
+    }
+
+
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
     Load configuration from JSON file with error handling.
@@ -73,3 +106,28 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error loading configuration: {e}")
         return {}
+
+
+def get_config() -> Dict[str, Any]:
+    """
+    Get complete configuration including environment variables and config file.
+    
+    Returns:
+        Complete configuration dictionary
+    """
+    # Load environment variables
+    load_dotenv()
+    
+    # Get database and API config
+    config = {
+        "database": get_db_config(),
+        "api": get_api_config()
+    }
+    
+    # Load additional config from file if exists
+    config_file = get_env("CONFIG_FILE")
+    if config_file:
+        file_config = load_config(config_file)
+        config.update(file_config)
+    
+    return config

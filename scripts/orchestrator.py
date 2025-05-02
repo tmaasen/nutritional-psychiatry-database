@@ -17,24 +17,24 @@ import os
 import json
 import time
 import logging
+import sys
 from typing import List, Dict, Optional, Callable, Any
 from config import get_config, Config
 
 # Import utility modules
 from utils import (
     setup_logging,
-    load_json,
-    save_json,
-    ensure_directory,
     load_dotenv,
     get_env,
-    load_config,
-    create_project_dirs
+    get_config
 )
 from data.postgres_client import PostgresClient
-import subprocess
-import sys
-# Import processing modules - direct imports from each script
+
+# Import base classes
+from scripts.data_collection.base_api_client import BaseAPIClient
+from scripts.data_processing.base_processor import BaseProcessor
+
+# Import processing modules
 from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
 from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
 from scripts.data_collection.literature_extract import LiteratureExtractor
@@ -50,16 +50,6 @@ logger = setup_logging(__name__, log_file="nutritional_psychiatry_dataset.log")
 class DatasetOrchestrator:
     """Orchestrates the end-to-end process of building the Nutritional Psychiatry Dataset."""
     
-    def instantiate_db_client(self) -> PostgresClient:
-        """
-        Instantiates and returns a PostgresClient instance.
-
-        Returns:
-            PostgresClient: An instance of the PostgresClient.
-        """
-        return PostgresClient()
-    
-
     def __init__(
         self,
         config_file: Optional[str] = None,
@@ -96,55 +86,91 @@ class DatasetOrchestrator:
         self.batch_size = batch_size or self.config.processing["batch_size"]
         self.force_reprocess = force_reprocess if force_reprocess is not None else self.config.processing["force_reprocess"]
         
-        # Set up directories
-        self.directories = self.config.dirs
-        
-        # Validate required API keys
-        self._validate_api_keys()
+        # Initialize database client
+        self.db_client = PostgresClient()
         
         # Initialize step tracking
         self.completed_steps = set()
         
-        self.db_client = self.instantiate_db_client()
+        # Validate API keys
+        self._validate_api_keys()
+        
+        # Initialize processors
+        self._initialize_processors()
     
     def _validate_api_keys(self):
-        """Validate required API keys are present."""
-        required_keys = ["USDA_API_KEY", "OPENAI_API_KEY"]
+        """Validate required API keys."""
+        required_keys = {
+            "USDA_API_KEY": "USDA FoodData Central API key",
+            "OPENAI_API_KEY": "OpenAI API key"
+        }
         
-        # First check the passed API keys
-        if self.api_keys:
-            for key in required_keys:
-                if key not in self.api_keys or not self.api_keys[key]:
-                    # Try to get from environment
-                    self.api_keys[key] = get_env(key)
-        else:
-            # Initialize from environment
-            self.api_keys = {key: get_env(key) for key in required_keys}
-        
-        # Check if any keys are still missing
-        missing_keys = [key for key in required_keys if key not in self.api_keys or not self.api_keys[key]]
+        missing_keys = []
+        for key, description in required_keys.items():
+            if not self.api_keys.get(key):
+                missing_keys.append(f"{key} ({description})")
         
         if missing_keys:
-            logger.warning(f"Missing required API keys: {', '.join(missing_keys)}")
-            logger.warning("Some functionality may be limited")
+            error_msg = f"Missing required API keys: {', '.join(missing_keys)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Test API keys
+        try:
+            # Test USDA API key
+            test_client = USDAFoodDataCentralAPI(
+                api_key=self.api_keys["USDA_API_KEY"],
+                db_client=self.db_client
+            )
+            test_client.search("test")
+            logger.info("USDA API key validated successfully")
+            
+            # Test OpenAI API key
+            test_client = AIEnrichmentEngine(
+                api_key=self.api_keys["OPENAI_API_KEY"],
+                db_client=self.db_client
+            )
+            test_client.process({"name": "test"})
+            logger.info("OpenAI API key validated successfully")
+            
+        except Exception as e:
+            logger.error(f"API key validation failed: {e}")
+            raise
     
     def _initialize_processors(self):
         """Initialize all data processors and API clients."""
-        # Initialize API clients - remove db_client
-        self.usda_client = USDAFoodDataCentralAPI(api_key=self.api_keys.get("USDA_API_KEY"))
-        self.off_client = OpenFoodFactsAPI()
+        # Initialize API clients
+        self.usda_client = USDAFoodDataCentralAPI(
+            api_key=self.api_keys.get("USDA_API_KEY"),
+            db_client=self.db_client
+        )
+        self.off_client = OpenFoodFactsAPI(
+            db_client=self.db_client
+        )
+        self.literature_client = LiteratureExtractor(
+            db_client=self.db_client
+        )
         
         # Initialize processors
-        schema_path = os.path.join("schema", "schema.json")
-        self.transformer = USDADataTransformer(schema_path)
-        self.enricher = AIEnrichmentEngine(api_key=self.api_keys.get("OPENAI_API_KEY"))
-        self.validator = DataValidator(schema_path)
-        self.calibrator = ConfidenceCalibrationSystem(
-            evaluation_dir=self.directories["evaluation"],
-            dataset_dir=self.directories["ai_generated"],
-            output_dir=self.directories["calibrated"]
+        self.transformer = USDADataTransformer(
+            db_client=self.db_client
         )
-        self.prioritizer = SourcePrioritizer()
+        self.enricher = AIEnrichmentEngine(
+            api_key=self.api_keys.get("OPENAI_API_KEY"),
+            db_client=self.db_client
+        )
+        self.validator = DataValidator(
+            db_client=self.db_client
+        )
+        self.calibrator = ConfidenceCalibrationSystem(
+            evaluation_dir=self.config.dirs["evaluation"],
+            dataset_dir=self.config.dirs["ai_generated"],
+            output_dir=self.config.dirs["calibrated"],
+            db_client=self.db_client
+        )
+        self.prioritizer = SourcePrioritizer(
+            db_client=self.db_client
+        )
     
     def _should_run_step(self, step_name: str) -> bool:
         """Determine if a step should be run based on skip_steps and only_steps."""
@@ -206,415 +232,419 @@ class DatasetOrchestrator:
         step_name = "usda_data_collection"
         
         def execute():
-            saved_files = []
+            saved_ids = []
             
             if not self.food_list:
                 logger.info("No food list provided. Using default foods.")
                 default_foods = ["blueberries raw", "salmon raw", "spinach raw", "walnuts raw", "yogurt raw"]
                 self.food_list = default_foods
-            else:
-                logger.info(f"Using food list provided: {self.food_list}")
             
             for food_query in self.food_list:
                 logger.info(f"Collecting USDA data for {food_query}...")
-                command = [
-                    "python",
-                    "scripts/data_collection/usda_api.py",
-                    "--query",
-                    food_query,
-                    "--limit",
-                    "1"
-                ]
                 
-                result = subprocess.run(command, capture_output=True, text=True)
+                try:
+                    # Search for food
+                    search_results = self.usda_client.search(food_query)
+                    
+                    if not search_results.get("foods"):
+                        logger.warning(f"No results found for {food_query}")
+                        continue
+                    
+                    # Get details for first result
+                    food_id = search_results["foods"][0]["fdcId"]
+                    food_details = self.usda_client.get_details(food_id)
+                    
+                    # Process and save
+                    processed = self.usda_client.process_response(food_details)
+                    if self.usda_client.validate_response(processed):
+                        item_id = self.usda_client.save_to_database(processed)
+                        saved_ids.append(item_id)
+                        logger.info(f"Saved USDA data for {food_query} with ID {item_id}")
+                    else:
+                        logger.warning(f"Invalid data for {food_query}")
                 
-                if result.returncode == 0:
-                    logger.info(f"USDA data collection for {food_query} completed successfully.")
-                    # Process the captured output if necessary
-                    logger.debug(f"STDOUT: {result.stdout}")
-                    logger.debug(f"STDERR: {result.stderr}")
-                else:
-                    logger.error(f"USDA data collection for {food_query} failed.")
-                    logger.error(f"STDERR: {result.stderr}")
-                    logger.error(f"STDOUT: {result.stdout}")
+                except Exception as e:
+                    logger.error(f"Error processing {food_query}: {e}")
+                    continue
             
-            return saved_files
+            return saved_ids
         
         return self.run_step(step_name, execute)
-
     
     def collect_openfoodfacts_data(self) -> List[str]:
         """Collect food data from OpenFoodFacts."""
         step_name = "openfoodfacts_data_collection"
         
         def execute():
-            saved_files = []
+            saved_ids = []
+            
             if not self.food_list:
                 logger.info("No food list provided. Using default foods.")
-                default_foods = ["blueberries", "salmon", "spinach", "walnuts", "yogurt"]
+                default_foods = ["blueberries raw", "salmon raw", "spinach raw", "walnuts raw", "yogurt raw"]
                 self.food_list = default_foods
-            else:
-                logger.info(f"Using food list provided: {self.food_list}")
-                
+            
             for food_query in self.food_list:
                 logger.info(f"Collecting OpenFoodFacts data for {food_query}...")
-                command = [
-                    "python",
-                    "scripts/data_collection/openfoodfacts_api.py",
-                    "--query",
-                    food_query,
-                    "--limit",
-                    "1"
-                ]
                 
-                result = subprocess.run(command, capture_output=True, text=True)
+                try:
+                    # Search for food
+                    search_results = self.off_client.search(food_query)
+                    
+                    if not search_results.get("products"):
+                        logger.warning(f"No results found for {food_query}")
+                        continue
+                    
+                    # Get details for first result
+                    product_id = search_results["products"][0]["id"]
+                    product_details = self.off_client.get_details(product_id)
+                    
+                    # Process and save
+                    processed = self.off_client.process_response(product_details)
+                    if self.off_client.validate_response(processed):
+                        item_id = self.off_client.save_to_database(processed)
+                        saved_ids.append(item_id)
+                        logger.info(f"Saved OpenFoodFacts data for {food_query} with ID {item_id}")
+                    else:
+                        logger.warning(f"Invalid data for {food_query}")
                 
-                if result.returncode == 0:
-                    logger.info(f"OpenFoodFacts data collection for {food_query} completed successfully.")
-                else:
-                    logger.error(f"OpenFoodFacts data collection for {food_query} failed.")
-                    logger.error(result.stderr)
+                except Exception as e:
+                    logger.error(f"Error processing {food_query}: {e}")
+                    continue
             
-            return saved_files
-        return self.run_step(step_name, execute)    
+            return saved_ids
+        
+        return self.run_step(step_name, execute)
+    
     def collect_literature_data(self) -> List[str]:
-        """Extract food-mood relationships from literature."""
+        """Collect food data from literature."""
         step_name = "literature_data_collection"
         
         def execute():
-            import subprocess
-            import os
-
-            saved_files = []
+            saved_ids = []
             
-            # Check if literature sources are defined
-            literature_sources = self.config.get("literature_sources", [])
-            if not literature_sources:
-                logger.warning("No literature sources defined. Skipping literature data collection.")
-                return []
-
-            # Iterate through each literature source and run the literature_extract script
-            for source in literature_sources:
-                source_type = source.get("type")
-                source_path = source.get("path")
-                source_url = source.get("url")
-
-                command = [
-                    "python",
-                    "scripts/data_collection/literature_extract.py"
-                ]
-
-                if source_type == "pdf" and source_path:
-                    command.extend(["--pdfs", source_path])
-                    logger.info(f"Extracting literature data from PDF: {source_path}...")
-                elif source_type == "url" and source_url:
-                    command.extend(["--urls", source_url])
-                    logger.info(f"Extracting literature data from URL: {source_url}...")
-                else:
-                    logger.warning(f"Invalid literature source: {source}")
+            if not self.food_list:
+                logger.info("No food list provided. Using default foods.")
+                default_foods = ["blueberries raw", "salmon raw", "spinach raw", "walnuts raw", "yogurt raw"]
+                self.food_list = default_foods
+            
+            for food_query in self.food_list:
+                logger.info(f"Collecting literature data for {food_query}...")
+                
+                try:
+                    # Search for literature
+                    search_results = self.literature_client.search(food_query)
+                    
+                    if not search_results:
+                        logger.warning(f"No results found for {food_query}")
+                        continue
+                    
+                    # Process and save each result
+                    for result in search_results:
+                        processed = self.literature_client.process_response(result)
+                        if self.literature_client.validate_response(processed):
+                            item_id = self.literature_client.save_to_database(processed)
+                            saved_ids.append(item_id)
+                            logger.info(f"Saved literature data for {food_query} with ID {item_id}")
+                        else:
+                            logger.warning(f"Invalid data for {food_query}")
+                
+                except Exception as e:
+                    logger.error(f"Error processing {food_query}: {e}")
                     continue
-
-                result = subprocess.run(command, capture_output=True, text=True)
-
-                if result.returncode == 0:
-                    logger.info(f"Literature extraction from {source_type}: {source_path or source_url} completed successfully.")
-                    saved_files.append(source_path or source_url)
-                else:
-                    logger.error(f"Literature extraction from {source_type}: {source_path or source_url} failed.")
-                    logger.error(f"STDERR: {result.stderr}")
             
-            return saved_files
+            return saved_ids
         
         return self.run_step(step_name, execute)
     
     def transform_data(self) -> List[str]:
-        """Transform raw data to our schema format."""
+        """Transform collected data to match our schema."""
         step_name = "data_transformation"
-        dependencies = ["usda_data_collection"]
         
         def execute():
-            # Process all USDA foods
-            # we pass the db_client to the transformer, so that it can use it to interact with the db
-            self.transformer.process_directory(
-                db_client = self.db_client,
-                input_dir="", output_dir=""
-            )
+            # Get all foods from database
+            foods = self.db_client.get_foods_by_name("")
+            
+            # Transform each food
+            transformed_ids = []
+            for food in foods:
+                try:
+                    # Transform and validate
+                    transformed = self.transformer.transform(food)
+                    errors = self.transformer.validate(transformed)
+                    
+                    if errors:
+                        logger.warning(f"Validation errors for {food['name']}: {errors}")
+                        continue
+                    
+                    # Save to database
+                    item_id = self.transformer.save_to_database(transformed)
+                    transformed_ids.append(item_id)
+                    logger.info(f"Transformed {food['name']} with ID {item_id}")
+                
+                except Exception as e:
+                    logger.error(f"Error transforming {food['name']}: {e}")
+                    continue
+            
+            return transformed_ids
         
-        return self.run_step(step_name, execute, dependencies)
+        return self.run_step(step_name, execute)
     
     def enrich_with_ai(self) -> List[str]:
-        """Enrich food data with AI-generated predictions."""
+        """Enrich data with AI-generated information."""
         step_name = "ai_enrichment"
-        dependencies = ["data_transformation"]
         
         def execute():
-            # Apply AI enrichment to all foods in db
-            self.enricher.enrich_directory(
-                db_client=self.db_client,
-                limit=self.batch_size if self.batch_size > 0 else None,
-            )
+            # Get all foods from database
+            foods = self.db_client.get_foods_by_name("")
+            
+            # Enrich each food
+            enriched_ids = []
+            for food in foods:
+                try:
+                    # Enrich and validate
+                    enriched = self.enricher.process(food)
+                    errors = self.enricher.validate(enriched)
+                    
+                    if errors:
+                        logger.warning(f"Validation errors for {food['name']}: {errors}")
+                        continue
+                    
+                    # Save to database
+                    item_id = self.enricher.save_to_database(enriched)
+                    enriched_ids.append(item_id)
+                    logger.info(f"Enriched {food['name']} with ID {item_id}")
+                
+                except Exception as e:
+                    logger.error(f"Error enriching {food['name']}: {e}")
+                    continue
+            
+            return enriched_ids
         
-        return self.run_step(step_name, execute, dependencies)
+        return self.run_step(step_name, execute)
     
     def validate_with_known_answers(self) -> Dict:
-        """Validate AI-generated predictions against known reference values."""
-        step_name = "known_answer_testing"
-        dependencies = ["ai_enrichment"]
+        """Validate data against known answers."""
+        step_name = "known_answer_validation"
         
         def execute():
-            # Check if reference data exists
-            reference_dir = self.directories["reference"]
-            if not os.path.exists(reference_dir) or not os.listdir(reference_dir):
-                logger.warning("No reference data found. Skipping validation.")
-                return {}
+            # Get all foods from database
+            foods = self.db_client.get_foods_by_name("")
             
-            # Load test foods
-            test_foods_path = os.path.join(self.output_dir, "test_foods.json")
-            if not os.path.exists(test_foods_path):
-                logger.warning(f"Test foods file {test_foods_path} not found.")
-                return {}
+            # Validate each food
+            validation_results = {
+                "passed": [],
+                "failed": [],
+                "errors": []
+            }
             
-            test_foods = load_json(test_foods_path)
+            for food in foods:
+                try:
+                    # Validate
+                    errors = self.validator.validate(food)
+                    
+                    if errors:
+                        validation_results["failed"].append({
+                            "food_id": food["food_id"],
+                            "name": food["name"],
+                            "errors": errors
+                        })
+                    else:
+                        validation_results["passed"].append({
+                            "food_id": food["food_id"],
+                            "name": food["name"]
+                        })
+                
+                except Exception as e:
+                    validation_results["errors"].append({
+                        "food_id": food["food_id"],
+                        "name": food["name"],
+                        "error": str(e)
+                    })
             
-            # Initialize tester
-            from scripts.ai.known_answer_tester import KnownAnswerTester
-            from scripts.ai.openai_client import OpenAIClient
-            
-            openai_client = OpenAIClient(api_key=self.api_keys.get("OPENAI_API_KEY"))
-            
-            tester = KnownAnswerTester(
-                openai_client=openai_client,
-                reference_data_dir=reference_dir,
-                output_dir=self.directories["evaluation"]
-            )
-            
-            # Run test suite
-            return tester.run_test_suite(test_foods)
+            return validation_results
         
-        return self.run_step(step_name, execute, dependencies)
+        return self.run_step(step_name, execute)
     
     def calibrate_confidence(self) -> Dict:
-        """Calibrate confidence ratings based on validation results."""
+        """Calibrate confidence scores."""
         step_name = "confidence_calibration"
-        dependencies = ["ai_enrichment"]
         
         def execute():
-            # Initialize calibrator from above
-            # Calibrate dataset
-            self.calibrator.calibrate_dataset()
+            # Get all foods from database
+            foods = self.db_client.get_foods_by_name("")
             
-            # Return summary
-            return {"status": "completed"}
+            # Calibrate each food
+            calibration_results = {
+                "calibrated": [],
+                "failed": [],
+                "errors": []
+            }
+            
+            for food in foods:
+                try:
+                    # Calibrate
+                    calibrated = self.calibrator.process(food)
+                    
+                    if calibrated:
+                        calibration_results["calibrated"].append({
+                            "food_id": food["food_id"],
+                            "name": food["name"]
+                        })
+                    else:
+                        calibration_results["failed"].append({
+                            "food_id": food["food_id"],
+                            "name": food["name"]
+                        })
+                
+                except Exception as e:
+                    calibration_results["errors"].append({
+                        "food_id": food["food_id"],
+                        "name": food["name"],
+                        "error": str(e)
+                    })
+            
+            return calibration_results
         
-        return self.run_step(step_name, execute, dependencies)
+        return self.run_step(step_name, execute)
     
     def merge_sources(self) -> List[str]:
-        """Merge data from different sources with intelligent prioritization."""
-        step_name = "source_prioritization"
-        dependencies = ["data_transformation"]
+        """Merge data from different sources."""
+        step_name = "source_merging"
         
         def execute():
-            # Determine AI directory based on calibration
-            ai_dir = self.directories["calibrated"] if "confidence_calibration" in self.completed_steps else self.directories["ai_generated"]
+            # Get all foods from database
+            foods = self.db_client.get_foods_by_name("")
             
-            # Check if literature directory contains files
-            lit_dir = None
-            if os.path.exists(self.directories["literature_raw"]) and os.listdir(self.directories["literature_raw"]):
-                lit_dir = self.directories["literature_raw"]  
-            
-            # Merge directories
-            return self.prioritizer.merge_directory(
-                usda_dir=self.directories["processed"],
-                openfoodfacts_dir=self.directories["off_raw"],
-                literature_dir=lit_dir,
-                ai_dir=ai_dir,
-                output_dir=self.directories["merged"]
-            )
-        
-        return self.run_step(step_name, execute, dependencies)
-    
-    def prepare_final_dataset(self) -> List[str]:
-        """Prepare the final dataset for use."""
-        step_name = "final_preparation"
-        dependencies = ["source_prioritization"]
-        
-        def execute():
-            # For the POC, simply copy merged files to final directory
-            import shutil
-            
-            final_files = []
-            
-            for file in os.listdir(self.directories["merged"]):
-                if file.endswith(".json"):
-                    source_path = os.path.join(self.directories["merged"], file)
-                    dest_path = os.path.join(self.directories["final"], file)
+            # Merge each food
+            merged_ids = []
+            for food in foods:
+                try:
+                    # Merge sources
+                    merged = self.prioritizer.process(food)
+                    errors = self.prioritizer.validate(merged)
                     
-                    shutil.copy(source_path, dest_path)
-                    final_files.append(dest_path)
+                    if errors:
+                        logger.warning(f"Validation errors for {food['name']}: {errors}")
+                        continue
+                    
+                    # Save to database
+                    item_id = self.prioritizer.save_to_database(merged)
+                    merged_ids.append(item_id)
+                    logger.info(f"Merged {food['name']} with ID {item_id}")
+                
+                except Exception as e:
+                    logger.error(f"Error merging {food['name']}: {e}")
+                    continue
             
-            return final_files
+            return merged_ids
         
-        return self.run_step(step_name, execute, dependencies)
+        return self.run_step(step_name, execute)
     
     def run_all(self) -> bool:
-        """Run the complete data processing pipeline."""
-        logger.info("Starting Nutritional Psychiatry Dataset generation pipeline")
-        start_time = time.time()
+        """
+        Run all steps in the pipeline.
         
+        Returns:
+            Whether all steps completed successfully
+        """
         steps = [
-            ("Step 1: USDA Data Collection", self.collect_usda_data, []),
-            ("Step 2: OpenFoodFacts Data Collection", self.collect_openfoodfacts_data, []),
-            ("Step 3: Literature Data Collection", self.collect_literature_data, []),
-            ("Step 4: Data Transformation", self.transform_data, ["usda_data_collection"]),
-            ("Step 5: AI Enrichment", self.enrich_with_ai, ["data_transformation"]),
-            ("Step 6: Known Answer Testing", self.validate_with_known_answers, ["ai_enrichment"]),
-            ("Step 7: Confidence Calibration", self.calibrate_confidence, ["ai_enrichment"]),
-            ("Step 8: Source Prioritization & Merging", self.merge_sources, ["data_transformation"]),
-            ("Step 9: Final Dataset Preparation", self.prepare_final_dataset, ["source_prioritization"])
+            ("usda_data_collection", self.collect_usda_data, []),
+            ("openfoodfacts_data_collection", self.collect_openfoodfacts_data, []),
+            ("literature_data_collection", self.collect_literature_data, []),
+            ("data_transformation", self.transform_data, ["usda_data_collection", "openfoodfacts_data_collection", "literature_data_collection"]),
+            ("ai_enrichment", self.enrich_with_ai, ["data_transformation"]),
+            ("known_answer_validation", self.validate_with_known_answers, ["ai_enrichment"]),
+            ("confidence_calibration", self.calibrate_confidence, ["known_answer_validation"]),
+            ("source_merging", self.merge_sources, ["confidence_calibration"])
         ]
         
-        failures = []
-        for step_desc, step_func, dependencies in steps:
-            logger.info(f"=== {step_desc} ===")
-            
-            # Extract step name from description
-            step_name = step_desc.split(":", 1)[1].strip().lower().replace(" ", "_")        
-            if step_name == 'data_transformation':
-                step_func = lambda: step_func(db_client=self.db_client)
-            if step_name == 'ai_enrichment':
-                step_func = lambda: step_func(db_client=self.db_client)
-            # Run step
+        success = True
+        for step_name, step_func, dependencies in steps:
             result = self.run_step(step_name, step_func, dependencies)
-            
             if result is None:
-                failures.append(step_desc)
-                if not self.config.get("continue_on_failure", False):
-                    logger.error(f"Pipeline stopped due to failure in {step_desc}")
-                    break
+                success = False
+                logger.error(f"Step {step_name} failed")
         
-        end_time = time.time()
-        logger.info(f"Pipeline completed in {end_time - start_time:.2f} seconds")
-        
-        if failures:
-            logger.error(f"The following steps failed: {', '.join(failures)}")
-            return False
-        else:
-            logger.info("All steps completed successfully")
-            return True
+        return success
     
     def run_interactive(self):
-        """Run the pipeline interactively, asking for confirmation at each step."""
-        print("\n=== Nutritional Psychiatry Dataset Generator ===\n")
-        print("This tool will guide you through generating the dataset step by step.")
+        """Run the pipeline interactively."""
+        print("Nutritional Psychiatry Dataset Pipeline")
+        print("=====================================")
         
-        steps = [
-            ("Collect USDA Food Data", self.collect_usda_data, []),
-            ("Collect OpenFoodFacts Data", self.collect_openfoodfacts_data, []),
-            ("Collect Literature Data", self.collect_literature_data, []),
-            ("Transform Data to Schema", self.transform_data, ["collect_usda_food_data"]),
-            ("Enrich with AI Predictions", self.enrich_with_ai, ["transform_data_to_schema"]),
-            ("Validate with Known Answers", self.validate_with_known_answers, ["enrich_with_ai_predictions"]),
-            ("Calibrate Confidence Ratings", self.calibrate_confidence, ["enrich_with_ai_predictions"]),
-            ("Merge Data Sources", self.merge_sources, ["transform_data_to_schema"]),
-            ("Prepare Final Dataset", self.prepare_final_dataset, ["merge_data_sources"])
-        ]
-        
-        for i, (step_desc, step_func, dependencies) in enumerate(steps, 1):
-            print(f"\nStep {i}/{len(steps)}: {step_desc}")
+        while True:
+            print("\nAvailable steps:")
+            print("1. Collect USDA data")
+            print("2. Collect OpenFoodFacts data")
+            print("3. Collect literature data")
+            print("4. Transform data")
+            print("5. Enrich with AI")
+            print("6. Validate with known answers")
+            print("7. Calibrate confidence")
+            print("8. Merge sources")
+            print("9. Run all steps")
+            print("0. Exit")
             
-            # Convert to step name format
-            step_name = step_desc.lower().replace(" ", "_")
+            choice = input("\nEnter your choice (0-9): ")
             
-            if not self._should_run_step(step_name):
-                print("  Skipping this step based on configuration.")
-                continue
-            
-            proceed = input("  Proceed with this step? (Y/n): ").strip().lower()
-            if proceed in ("", "y", "yes"):
-                print(f"  Running {step_desc}...")
-                result = self.run_step(step_name, step_func, dependencies)
-                
-                if step_name == 'transform_data_to_schema':
-                    result = self.transform_data(db_client=self.db_client)
-                    
-                if step_name == 'enrich_with_ai_predictions':
-                    result = self.enrich_with_ai(db_client=self.db_client)
-                
-                if result is not None:
-                    print(f"  ✓ {step_desc} completed successfully.")
-                else:
-                    print(f"  ✗ {step_desc} failed.")
-                    retry = input("  Retry this step? (y/N): ").strip().lower()
-                    if retry in ("y", "yes"):
-                        print(f"  Retrying {step_desc}...")
-                        result = self.run_step(step_name, step_func, dependencies)
-                        if result is None:
-                            print(f"  ✗ {step_desc} failed again.")
-                    
-                    if result is None and not self.config.get("continue_on_failure", False):
-                        proceed = input("  Continue despite failure? (y/N): ").strip().lower()
-                        if proceed not in ("y", "yes"):
-                            print("\nExiting due to step failure.")
-                            break
+            if choice == "0":
+                break
+            elif choice == "1":
+                self.collect_usda_data()
+            elif choice == "2":
+                self.collect_openfoodfacts_data()
+            elif choice == "3":
+                self.collect_literature_data()
+            elif choice == "4":
+                self.transform_data()
+            elif choice == "5":
+                self.enrich_with_ai()
+            elif choice == "6":
+                self.validate_with_known_answers()
+            elif choice == "7":
+                self.calibrate_confidence()
+            elif choice == "8":
+                self.merge_sources()
+            elif choice == "9":
+                self.run_all()
             else:
-                print(f"  Skipping {step_desc}.")
-        
-        print("\nDataset generation process complete.")
+                print("Invalid choice. Please try again.")
 
 def main():
-    """Main function to execute the orchestrator."""
+    """Main function."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Nutritional Psychiatry Dataset Orchestrator")
+    parser = argparse.ArgumentParser(description="Nutritional Psychiatry Dataset Pipeline")
     parser.add_argument("--config", help="Path to configuration file")
-    parser.add_argument("--usda-key", help="USDA API key")
-    parser.add_argument("--openai-key", help="OpenAI API key")
-    parser.add_argument("--food", action="append", help="Food to process (can be used multiple times)")
-    parser.add_argument("--food-list", help="Path to JSON file with list of foods", 
-                       default=os.path.join("docs", "examples", "test_food.json"))
-    parser.add_argument("--output-dir", default="data", help="Base directory for all data")
-    parser.add_argument("--skip", action="append", help="Steps to skip (can be used multiple times)")
-    parser.add_argument("--only", action="append", help="Only run these steps (can be used multiple times)")
-    parser.add_argument("--batch-size", type=int, default=10, help="Number of foods to process in each batch")
-    parser.add_argument("--force", action="store_true", help="Force reprocessing of existing files")
-    parser.add_argument("--interactive", action="store_true", help="Run in interactive mode", default=True)
+    parser.add_argument("--foods", nargs="+", help="List of foods to process")
+    parser.add_argument("--skip", nargs="+", help="Steps to skip")
+    parser.add_argument("--only", nargs="+", help="Steps to run (ignores skip)")
+    parser.add_argument("--batch-size", type=int, help="Batch size for processing")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing")
+    parser.add_argument("--interactive", action="store_true", help="Run interactively")
     
     args = parser.parse_args()
     
-    # Load food list from file if provided
-    food_list = []
-    if args.food:
-        food_list = args.food
-    elif args.food_list and os.path.exists(args.food_list):
-        try:
-            food_list = load_json(args.food_list)
-        except Exception as e:
-            logger.error(f"Error loading food list: {e}")
+    try:
+        orchestrator = DatasetOrchestrator(
+            config_file=args.config,
+            food_list=args.foods,
+            skip_steps=args.skip,
+            only_steps=args.only,
+            batch_size=args.batch_size,
+            force_reprocess=args.force
+        )
+        
+        if args.interactive:
+            orchestrator.run_interactive()
+        else:
+            success = orchestrator.run_all()
+            if not success:
+                sys.exit(1)
     
-    # Set up API keys
-    api_keys = {
-        "USDA_API_KEY": args.usda_key or get_env("USDA_API_KEY", ""),
-        "OPENAI_API_KEY": args.openai_key or get_env("OPENAI_API_KEY", "")
-    }
-    
-    # Create orchestrator
-    orchestrator = DatasetOrchestrator(
-        config_file=args.config,
-        api_keys=api_keys,
-        food_list=food_list,
-        output_dir=args.output_dir,
-        skip_steps=args.skip,
-        only_steps=args.only,
-        batch_size=args.batch_size,
-        force_reprocess=args.force
-    )
-    
-    # Run pipeline
-    if args.interactive:
-        orchestrator.run_interactive()
-    else:
-        orchestrator.run_all()
-
+    except Exception as e:
+        logger.error(f"Error running orchestrator: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
