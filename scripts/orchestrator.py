@@ -29,10 +29,11 @@ from utils import (
     load_dotenv,
     get_env,
     load_config,
-    create_project_dirs,
-    get_project_dirs
+    create_project_dirs
 )
-
+from data.postgres_client import PostgresClient
+import subprocess
+import sys
 # Import processing modules - direct imports from each script
 from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
 from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
@@ -48,6 +49,16 @@ logger = setup_logging(__name__, log_file="nutritional_psychiatry_dataset.log")
 
 class DatasetOrchestrator:
     """Orchestrates the end-to-end process of building the Nutritional Psychiatry Dataset."""
+    
+    def instantiate_db_client(self) -> PostgresClient:
+        """
+        Instantiates and returns a PostgresClient instance.
+
+        Returns:
+            PostgresClient: An instance of the PostgresClient.
+        """
+        return PostgresClient()
+    
 
     def __init__(
         self,
@@ -93,6 +104,8 @@ class DatasetOrchestrator:
         
         # Initialize step tracking
         self.completed_steps = set()
+        
+        self.db_client = self.instantiate_db_client()
     
     def _validate_api_keys(self):
         """Validate required API keys are present."""
@@ -117,7 +130,7 @@ class DatasetOrchestrator:
     
     def _initialize_processors(self):
         """Initialize all data processors and API clients."""
-        # Initialize API clients
+        # Initialize API clients - remove db_client
         self.usda_client = USDAFoodDataCentralAPI(api_key=self.api_keys.get("USDA_API_KEY"))
         self.off_client = OpenFoodFactsAPI()
         
@@ -195,49 +208,40 @@ class DatasetOrchestrator:
         def execute():
             saved_files = []
             
-            # Use the first food if list provided
-            if self.food_list:
-                food_query = self.food_list[0]
-                if isinstance(food_query, dict):
-                    food_query = food_query.get("name", str(food_query))
-                
-                # Search for the food
-                search_results = self.usda_client.search_foods(food_query)
-                
-                if search_results.get("foods"):
-                    # Get the first result
-                    fdc_id = search_results["foods"][0]["fdcId"]
-                    
-                    # Get detailed food data
-                    food_details = self.usda_client.get_food_details(fdc_id)
-                    
-                    # Save to file
-                    filename = f"{food_query.lower().replace(' ', '_')}.json"
-                    file_path = os.path.join(self.directories["usda_raw"], filename)
-                    
-                    save_json(food_details, file_path)
-                    saved_files.append(file_path)
+            if not self.food_list:
+                logger.info("No food list provided. Using default foods.")
+                default_foods = ["blueberries raw", "salmon raw", "spinach raw", "walnuts raw", "yogurt raw"]
+                self.food_list = default_foods
             else:
-                # For demo purposes, fetch a default set of foods
-                # This would be expanded in the real implementation
-                default_foods = ["blueberries", "salmon", "spinach", "walnuts", "yogurt"]
+                logger.info(f"Using food list provided: {self.food_list}")
+            
+            for food_query in self.food_list:
+                logger.info(f"Collecting USDA data for {food_query}...")
+                command = [
+                    "python",
+                    "scripts/data_collection/usda_api.py",
+                    "--query",
+                    food_query,
+                    "--limit",
+                    "1"
+                ]
                 
-                for food in default_foods:
-                    search_results = self.usda_client.search_foods(food)
-                    
-                    if search_results.get("foods"):
-                        fdc_id = search_results["foods"][0]["fdcId"]
-                        food_details = self.usda_client.get_food_details(fdc_id)
-                        
-                        filename = f"{food.lower().replace(' ', '_')}.json"
-                        file_path = os.path.join(self.directories["usda_raw"], filename)
-                        
-                        save_json(food_details, file_path)
-                        saved_files.append(file_path)
+                result = subprocess.run(command, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info(f"USDA data collection for {food_query} completed successfully.")
+                    # Process the captured output if necessary
+                    logger.debug(f"STDOUT: {result.stdout}")
+                    logger.debug(f"STDERR: {result.stderr}")
+                else:
+                    logger.error(f"USDA data collection for {food_query} failed.")
+                    logger.error(f"STDERR: {result.stderr}")
+                    logger.error(f"STDOUT: {result.stdout}")
             
             return saved_files
         
         return self.run_step(step_name, execute)
+
     
     def collect_openfoodfacts_data(self) -> List[str]:
         """Collect food data from OpenFoodFacts."""
@@ -245,40 +249,42 @@ class DatasetOrchestrator:
         
         def execute():
             saved_files = []
-            
-            # Use the first food if list provided
-            if self.food_list:
-                food_query = self.food_list[0]
-                if isinstance(food_query, dict):
-                    food_query = food_query.get("name", str(food_query))
-                
-                # Get OpenFoodFacts data
-                saved_files = self.off_client.search_and_save(
-                    query=food_query,
-                    output_dir=self.directories["off_raw"],
-                    limit=5  # Limit to 5 results
-                )
-            else:
-                # For demo purposes, fetch a default set of foods
+            if not self.food_list:
+                logger.info("No food list provided. Using default foods.")
                 default_foods = ["blueberries", "salmon", "spinach", "walnuts", "yogurt"]
+                self.food_list = default_foods
+            else:
+                logger.info(f"Using food list provided: {self.food_list}")
                 
-                for food in default_foods:
-                    saved_paths = self.off_client.search_and_save(
-                        query=food,
-                        output_dir=self.directories["off_raw"],
-                        limit=2  # Limit to 2 results per food
-                    )
-                    saved_files.extend(saved_paths)
+            for food_query in self.food_list:
+                logger.info(f"Collecting OpenFoodFacts data for {food_query}...")
+                command = [
+                    "python",
+                    "scripts/data_collection/openfoodfacts_api.py",
+                    "--query",
+                    food_query,
+                    "--limit",
+                    "1"
+                ]
+                
+                result = subprocess.run(command, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info(f"OpenFoodFacts data collection for {food_query} completed successfully.")
+                else:
+                    logger.error(f"OpenFoodFacts data collection for {food_query} failed.")
+                    logger.error(result.stderr)
             
             return saved_files
-        
-        return self.run_step(step_name, execute)
-    
+        return self.run_step(step_name, execute)    
     def collect_literature_data(self) -> List[str]:
         """Extract food-mood relationships from literature."""
         step_name = "literature_data_collection"
         
         def execute():
+            import subprocess
+            import os
+
             saved_files = []
             
             # Check if literature sources are defined
@@ -286,22 +292,36 @@ class DatasetOrchestrator:
             if not literature_sources:
                 logger.warning("No literature sources defined. Skipping literature data collection.")
                 return []
-            
-            # Initialize literature extractor
-            extractor = LiteratureExtractor(output_dir=self.directories["literature_raw"])
-            
-            # Process each literature source
+
+            # Iterate through each literature source and run the literature_extract script
             for source in literature_sources:
-                if source.get("type") == "pdf":
-                    # Process PDF file
-                    relationships, schema_data = extractor.process_pdf(source.get("path", ""))
-                    if schema_data:
-                        saved_files.append(source.get("path", ""))
-                elif source.get("type") == "url":
-                    # Process web page
-                    relationships, schema_data = extractor.process_url(source.get("url", ""))
-                    if schema_data:
-                        saved_files.append(source.get("url", ""))
+                source_type = source.get("type")
+                source_path = source.get("path")
+                source_url = source.get("url")
+
+                command = [
+                    "python",
+                    "scripts/data_collection/literature_extract.py"
+                ]
+
+                if source_type == "pdf" and source_path:
+                    command.extend(["--pdfs", source_path])
+                    logger.info(f"Extracting literature data from PDF: {source_path}...")
+                elif source_type == "url" and source_url:
+                    command.extend(["--urls", source_url])
+                    logger.info(f"Extracting literature data from URL: {source_url}...")
+                else:
+                    logger.warning(f"Invalid literature source: {source}")
+                    continue
+
+                result = subprocess.run(command, capture_output=True, text=True)
+
+                if result.returncode == 0:
+                    logger.info(f"Literature extraction from {source_type}: {source_path or source_url} completed successfully.")
+                    saved_files.append(source_path or source_url)
+                else:
+                    logger.error(f"Literature extraction from {source_type}: {source_path or source_url} failed.")
+                    logger.error(f"STDERR: {result.stderr}")
             
             return saved_files
         
@@ -313,10 +333,11 @@ class DatasetOrchestrator:
         dependencies = ["usda_data_collection"]
         
         def execute():
-            # Process all USDA files
-            return self.transformer.process_directory(
-                input_dir=self.directories["usda_raw"],
-                output_dir=self.directories["processed"]
+            # Process all USDA foods
+            # we pass the db_client to the transformer, so that it can use it to interact with the db
+            self.transformer.process_directory(
+                db_client = self.db_client,
+                input_dir="", output_dir=""
             )
         
         return self.run_step(step_name, execute, dependencies)
@@ -327,11 +348,10 @@ class DatasetOrchestrator:
         dependencies = ["data_transformation"]
         
         def execute():
-            # Apply AI enrichment to processed files
-            return self.enricher.enrich_directory(
-                input_dir=self.directories["processed"],
-                output_dir=self.directories["ai_generated"],
-                limit=self.batch_size if self.batch_size > 0 else None
+            # Apply AI enrichment to all foods in db
+            self.enricher.enrich_directory(
+                db_client=self.db_client,
+                limit=self.batch_size if self.batch_size > 0 else None,
             )
         
         return self.run_step(step_name, execute, dependencies)
@@ -400,7 +420,7 @@ class DatasetOrchestrator:
             # Check if literature directory contains files
             lit_dir = None
             if os.path.exists(self.directories["literature_raw"]) and os.listdir(self.directories["literature_raw"]):
-                lit_dir = self.directories["literature_raw"]
+                lit_dir = self.directories["literature_raw"]  
             
             # Merge directories
             return self.prioritizer.merge_directory(
@@ -444,7 +464,7 @@ class DatasetOrchestrator:
         steps = [
             ("Step 1: USDA Data Collection", self.collect_usda_data, []),
             ("Step 2: OpenFoodFacts Data Collection", self.collect_openfoodfacts_data, []),
-            ("Step 3: Literature Data Extraction", self.collect_literature_data, []),
+            ("Step 3: Literature Data Collection", self.collect_literature_data, []),
             ("Step 4: Data Transformation", self.transform_data, ["usda_data_collection"]),
             ("Step 5: AI Enrichment", self.enrich_with_ai, ["data_transformation"]),
             ("Step 6: Known Answer Testing", self.validate_with_known_answers, ["ai_enrichment"]),
@@ -458,8 +478,11 @@ class DatasetOrchestrator:
             logger.info(f"=== {step_desc} ===")
             
             # Extract step name from description
-            step_name = step_desc.split(":", 1)[1].strip().lower().replace(" ", "_")
-            
+            step_name = step_desc.split(":", 1)[1].strip().lower().replace(" ", "_")        
+            if step_name == 'data_transformation':
+                step_func = lambda: step_func(db_client=self.db_client)
+            if step_name == 'ai_enrichment':
+                step_func = lambda: step_func(db_client=self.db_client)
             # Run step
             result = self.run_step(step_name, step_func, dependencies)
             
@@ -487,7 +510,7 @@ class DatasetOrchestrator:
         steps = [
             ("Collect USDA Food Data", self.collect_usda_data, []),
             ("Collect OpenFoodFacts Data", self.collect_openfoodfacts_data, []),
-            ("Extract Literature Data", self.collect_literature_data, []),
+            ("Collect Literature Data", self.collect_literature_data, []),
             ("Transform Data to Schema", self.transform_data, ["collect_usda_food_data"]),
             ("Enrich with AI Predictions", self.enrich_with_ai, ["transform_data_to_schema"]),
             ("Validate with Known Answers", self.validate_with_known_answers, ["enrich_with_ai_predictions"]),
@@ -510,6 +533,12 @@ class DatasetOrchestrator:
             if proceed in ("", "y", "yes"):
                 print(f"  Running {step_desc}...")
                 result = self.run_step(step_name, step_func, dependencies)
+                
+                if step_name == 'transform_data_to_schema':
+                    result = self.transform_data(db_client=self.db_client)
+                    
+                if step_name == 'enrich_with_ai_predictions':
+                    result = self.enrich_with_ai(db_client=self.db_client)
                 
                 if result is not None:
                     print(f"  ✓ {step_desc} completed successfully.")

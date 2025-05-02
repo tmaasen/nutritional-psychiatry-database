@@ -13,11 +13,14 @@ This script assumes:
 
 import os
 import json
+import argparse
 import time
 import requests
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
+from data.postgres_client import PostgresClient
 import logging
 from config import get_config
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -127,50 +130,26 @@ class USDAFoodDataCentralAPI:
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error: {e}")
             raise
-    
-    def save_food_data(self, food_data: Dict, output_dir: str, filename: Optional[str] = None) -> str:
-        """
-        Save food data to a JSON file.
-        
-        Args:
-            food_data: Food data to save
-            output_dir: Directory to save to
-            filename: Optional filename (defaults to FDC ID)
-        
-        Returns:
-            Path to saved file
-        """
-        os.makedirs(output_dir, exist_ok=True)
-        
-        if not filename:
-            filename = f"{food_data.get('fdcId', 'unknown')}.json"
-        
-        file_path = os.path.join(output_dir, filename)
-        
-        with open(file_path, 'w') as f:
-            json.dump(food_data, f, indent=2)
-        
-        logger.info(f"Saved food data to {file_path}")
-        return file_path
 
 
-def fetch_poc_foods(api_client: USDAFoodDataCentralAPI, output_dir: str) -> List[str]:
+def search_and_import(api_client: USDAFoodDataCentralAPI, db_client: PostgresClient, search_term: str, limit: int = 10) -> List[str]:
     """
-    Fetch a predefined list of foods for the POC dataset.
+    Fetch a list of foods for the database based on the search term.
     
     Args:
         api_client: Initialized API client
-        output_dir: Directory to save raw food data
+        db_client: database client
+        search_term: Search term to use to query the API
+        limit: Maximum number of products to save
     
     Returns:
-        List of paths to saved food data files
+        List of imported food ids
     """
-    # Example foods representing diverse categories for POC
-    poc_foods = [
-        {"name": "Blueberries", "search_term": "blueberries raw"}
-    ]
     
-    saved_files = []
+    logger.info(f"Searching for '{search_term}'")
+    
+    
+    imported_foods = []
     for food in poc_foods:
         logger.info(f"Searching for {food['name']}...")
         search_results = api_client.search_foods(food['search_term'])
@@ -186,29 +165,194 @@ def fetch_poc_foods(api_client: USDAFoodDataCentralAPI, output_dir: str) -> List
         # Get detailed food data
         try:
             food_details = api_client.get_food_details(fdc_id)
-            filename = f"{food['name'].lower().replace(' ', '_')}.json"
-            saved_path = api_client.save_food_data(food_details, output_dir, filename)
-            saved_files.append(saved_path)
+            food_id = db_client.import_food_from_json(food_details)
+            imported_foods.append(food_id)
         except Exception as e:
             logger.error(f"Error fetching details for {food['name']}: {e}")
     
-    return saved_files
+    return imported_foods
+        
+def transform_to_schema(usda_food: Dict) -> Dict:
+        """
+        Transform USDA FoodData Central product data to our schema format.
+        
+        Args:
+            off_product: USDA FoodData Central product data
+        
+        Returns:
+            Dictionary in our schema format
+        """
+        
+        # Extract product data
+        food = usda_food
+        
+        if not food:
+            logger.warning("Empty food data")
+            return {}
+
+        # Extract nutriment data
+        nutrients = food.get("foodNutrients", [])
+
+        # Create basis of transformed data
+        transformed = {
+            "food_id": f"usda_{food.get('fdcId', '')}",
+            "name": food.get("description", ""),
+            "description": food.get("ingredients", food.get("description", "")),
+            "category": food.get("foodCategory", {}).get("description", "Miscellaneous"),
+            "serving_info": {
+                "serving_size": 100.0,  # Default
+                "serving_unit": "g",
+                "household_serving": food.get("householdServingFullText", "")
+            },
+            "standard_nutrients": _extract_standard_nutrients(nutrients),
+            "brain_nutrients": _extract_brain_nutrients(nutrients),
+            "bioactive_compounds": {},  # Mostly not available in OFF
+            "data_quality": {
+                "completeness": _calculate_completeness(nutrients),
+                "overall_confidence": 7,  # USDA data is generally reliable
+                "brain_nutrients_source": "usda"
+            },
+            "metadata": {
+                "version": "0.1.0",
+                "created": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat(),
+                "source_urls": [
+                    f"https://fdc.nal.usda.gov/fdc-app.html#/food-details/{food.get('fdcId', '')}/nutrients"
+                ],
+                "source_ids": {
+                    "usda_fdc_id": food.get("fdcId", "")
+                },
+            }
+        }
+        return transformed
+
+def _extract_standard_nutrients(food_nutrients: List[Dict]) -> Dict:
+    """Extract standard nutrients from USDA nutriments data."""
+    # Mapping from USDA field names to our schema
+    nutrient_mapping = {
+        "Energy": "calories",
+        "Protein": "protein_g",
+        "Carbohydrate, by difference": "carbohydrates_g",
+        "Total lipid (fat)": "fat_g",
+        "Fiber, total dietary": "fiber_g",
+        "Sugars, total including NLEA": "sugars_g",
+        "Calcium, Ca": "calcium_mg",
+        "Iron, Fe": "iron_mg",
+        "Magnesium, Mg": "magnesium_mg",
+        "Phosphorus, P": "phosphorus_mg",
+        "Potassium, K": "potassium_mg",
+        "Sodium, Na": "sodium_mg",
+        "Zinc, Zn": "zinc_mg",
+        "Copper, Cu": "copper_mg",
+        "Manganese, Mn": "manganese_mg",
+        "Selenium, Se": "selenium_mcg",
+        "Vitamin C, total ascorbic acid": "vitamin_c_mg",
+        "Vitamin A, IU": "vitamin_a_iu"
+    }
+
+    standard_nutrients = {}
+    for nutrient in food_nutrients:
+        nutrient_name = nutrient.get("nutrient", {}).get("name")
+        if nutrient_name in nutrient_mapping:
+            schema_name = nutrient_mapping[nutrient_name]
+            value = nutrient.get("amount")
+            if value is not None:
+                # Unit conversions if needed
+                if nutrient.get("nutrient", {}).get("unitName") == "µg":
+                    value /= 1000 #Convert ug to mg
+                if nutrient_name in ["Selenium, Se"]:
+                    value *= 1000 # Convert g to mcg
+                standard_nutrients[schema_name] = value
+
+    return standard_nutrients
 
 
+def _extract_brain_nutrients(food_nutrients: List[Dict]) -> Dict:
+    """Extract brain-specific nutrients from USDA nutriments data."""
+    # Mapping from USDA field names to our schema
+    nutrient_mapping = {
+        "Tryptophan": "tryptophan_mg",
+        "Tyrosine": "tyrosine_mg",
+        "Vitamin B-6": "vitamin_b6_mg",
+        "Folate, total": "folate_mcg",
+        "Vitamin B-12": "vitamin_b12_mcg",
+        "Vitamin D (D2 + D3)": "vitamin_d_mcg",
+        "Magnesium, Mg": "magnesium_mg",
+        "Zinc, Zn": "zinc_mg",
+        "Iron, Fe": "iron_mg",
+        "Selenium, Se": "selenium_mcg",
+        "Choline, total": "choline_mg"
+    }
+
+    brain_nutrients = {}
+    for nutrient in food_nutrients:
+        nutrient_name = nutrient.get("nutrient", {}).get("name")
+        if nutrient_name in nutrient_mapping:
+            schema_name = nutrient_mapping[nutrient_name]
+            value = nutrient.get("amount")
+            if value is not None:
+                # Unit conversions
+                if nutrient.get("nutrient", {}).get("unitName") == "µg":
+                    value *= 1000 #Convert ug to mg
+
+                if nutrient_name in ["Folate, total"]:
+                    value *= 1000000  # Convert g to mcg
+
+                if nutrient_name in ["Vitamin B-12","Vitamin D (D2 + D3)"]:
+                    value *= 1000000  # Convert g to mcg
+
+                if nutrient_name == "Selenium, Se":
+                    value *= 1000000 # Convert g to mcg
+                brain_nutrients[schema_name] = value
+
+    return brain_nutrients
+
+def _calculate_completeness(food_nutrients: List[Dict]) -> float:
+        """Calculate completeness score for nutriment data."""
+        # Count key nutrients we'd expect to have
+        key_nutrients = [
+            "Energy", "Protein", "Carbohydrate, by difference",
+            "Total lipid (fat)", "Fiber, total dietary", "Sugars, total including NLEA"
+        ]
+
+        # Brain nutrients we'd ideally have
+        brain_nutrients = [
+            "Vitamin B-6", "Folate, total", "Vitamin B-12",
+            "Vitamin D (D2 + D3)", "Magnesium, Mg", "Zinc, Zn",
+            "Iron, Fe", "Selenium, Se"
+        ]
+
+        # Count how many we have
+        standard_count = sum(1 for n in key_nutrients if any(n in nutrient.get("nutrient", {}).get("name", "") for nutrient in food_nutrients))
+        brain_count = sum(1 for n in brain_nutrients if any(n in nutrient.get("nutrient", {}).get("name", "") for nutrient in food_nutrients))
+
+        # Calculate completeness score
+        standard_completeness = standard_count / len(key_nutrients)
+        brain_completeness = brain_count / len(brain_nutrients) if brain_count > 0 else 0
+
+        # Weight standard nutrients more heavily
+        overall_completeness = (standard_completeness * 0.7) + (brain_completeness * 0.3)
+
+        return round(overall_completeness, 2)
 def main():
     """Main function to execute the script."""
-    output_dir = os.path.join("data", "raw", "usda_foods")
-    
-    # Use API key from environment variable or input
-    api_key = os.environ.get("USDA_API_KEY")
-    if not api_key:
-        api_key = input("Enter your USDA FoodData Central API key: ")
+    parser = argparse.ArgumentParser(description="Fetch and transform USDA FoodData Central data")
+    parser.add_argument("--query", help="Search term", default="blueberries raw")
+    parser.add_argument("--limit", type=int, help="Maximum number of products to import", default=10)
+    args = parser.parse_args()
     
     try:
+        api_key = os.environ.get("USDA_API_KEY")
+        if not api_key:
+            api_key = input("Enter your USDA FoodData Central API key: ")
+        
+        # instantiate database client
+        db_client = PostgresClient()
+
         api_client = USDAFoodDataCentralAPI(api_key)
-        logger.info("Fetching POC foods...")
-        saved_files = fetch_poc_foods(api_client, output_dir)
-        logger.info(f"Successfully saved {len(saved_files)} food files")
+        
+        imported_foods = search_and_import(api_client, db_client, search_term=args.query, limit=args.limit)
+        logger.info(f"Successfully imported {len(imported_foods)} products: {imported_foods}")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
 

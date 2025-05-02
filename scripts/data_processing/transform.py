@@ -8,6 +8,7 @@ import os
 import json
 import glob
 import logging
+from data.postgres_client import PostgresClient
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -19,6 +20,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class USDADataTransformer:
+    
+    def instantiate_db_client(self) -> PostgresClient:
+        """
+        Instantiates and returns a PostgresClient instance.
+
+        Returns:
+            PostgresClient: An instance of the PostgresClient.
+        """
+        return PostgresClient()
+    
     """Transforms USDA food data to our schema format."""
     
     # Mapping of USDA nutrient IDs to our schema fields
@@ -84,12 +95,14 @@ class USDADataTransformer:
         "Fast Foods": "Processed Foods"
     }
     
-    def __init__(self, schema_path: str):
+    def __init__(self, schema_path: str, db_client: PostgresClient = None):
         """
         Initialize the transformer with a schema definition.
         
         Args:
             schema_path: Path to the JSON schema file
+            db_client: Instance of PostgresClient for db access
+
         """
         try:
             with open(schema_path, 'r') as f:
@@ -98,6 +111,8 @@ class USDADataTransformer:
         except Exception as e:
             logger.error(f"Error loading schema: {e}")
             raise
+        
+        self.db_client = db_client or self.instantiate_db_client()
     
     def _get_nested_value(self, data: Dict, path: str, default: Any = None) -> Any:
         """
@@ -284,39 +299,27 @@ class USDADataTransformer:
             return round(fields_with_values / total_standard_fields, 2)
         return 0.0
     
-    def process_directory(self, input_dir: str, output_dir: str) -> List[str]:
+    def process_directory(self, input_dir: str, output_dir: str, db_client: PostgresClient = None) -> List[str]:
         """
         Process all USDA food data files in a directory.
         
         Args:
-            input_dir: Directory with raw USDA food data
-            output_dir: Directory to save transformed data
+            db_client: Database client
             
         Returns:
             List of paths to transformed data files
         """
-        os.makedirs(output_dir, exist_ok=True)
+        db_client = db_client or self.db_client
         
         transformed_files = []
-        input_files = glob.glob(os.path.join(input_dir, "*.json"))
+        
+        input_files = db_client.get_all_foods()
         
         for input_file in input_files:
             try:
-                with open(input_file, 'r') as f:
-                    usda_data = json.load(f)
-                
+                usda_data = input_file
                 transformed_data = self.transform_usda_food(usda_data)
-                
-                # Save transformed data
-                filename = os.path.basename(input_file)
-                output_path = os.path.join(output_dir, filename)
-                
-                with open(output_path, 'w') as f:
-                    json.dump(transformed_data, f, indent=2)
-                
-                transformed_files.append(output_path)
-                logger.info(f"Transformed {input_file} -> {output_path}")
-                
+                db_client.import_food_from_json(transformed_data)
             except Exception as e:
                 logger.error(f"Error processing {input_file}: {e}")
         
@@ -325,23 +328,12 @@ class USDADataTransformer:
 
 def main():
     """Main function to execute the transformation."""
-    # Paths
     schema_path = os.path.join("schema", "schema.json")
-    input_dir = os.path.join("data", "raw", "usda_foods")
-    output_dir = os.path.join("data", "processed", "base_foods")
-    
-    # Check if schema exists, if not create a placeholder
-    if not os.path.exists(schema_path):
-        os.makedirs(os.path.dirname(schema_path), exist_ok=True)
-        # Create a simplified schema for demonstration
-        with open(schema_path, 'w') as f:
-            json.dump({"title": "NutritionalPsychiatryFood"}, f)
-        logger.warning(f"Created placeholder schema at {schema_path}")
-    
+    db_client = PostgresClient()
+
     try:
-        transformer = USDADataTransformer(schema_path)
-        logger.info(f"Processing files from {input_dir}")
-        transformed_files = transformer.process_directory(input_dir, output_dir)
+        transformer = USDADataTransformer(schema_path, db_client)
+        transformed_files = transformer.process_directory("", "", db_client)
         logger.info(f"Successfully transformed {len(transformed_files)} files")
     except Exception as e:
         logger.error(f"An error occurred: {e}")

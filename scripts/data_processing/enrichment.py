@@ -18,6 +18,7 @@ import sys
 # Add the project root directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from scripts.ai.openai_client import OpenAIClient
+from data.postgres_client import PostgresClient
 
 # Check if OpenAI is installed
 if importlib.util.find_spec("openai") is None:
@@ -33,6 +34,15 @@ logger = logging.getLogger(__name__)
 
 class AIEnrichmentEngine:
     """Uses AI to enrich food data with brain-specific nutrients and mental health impacts."""
+
+    def instantiate_db_client(self) -> PostgresClient:
+        """
+        Instantiates and returns a PostgresClient instance.
+
+        Returns:
+            PostgresClient: An instance of the PostgresClient.
+        """
+        return PostgresClient()
     
     # Default brain nutrients to predict if not in USDA data
     BRAIN_NUTRIENTS_TO_PREDICT = [
@@ -63,14 +73,16 @@ class AIEnrichmentEngine:
         "prebiotic_fiber_g"
     ]
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", db_client: PostgresClient = None):
         """
         Initialize the AI enrichment engine.
         
         Args:
             api_key: OpenAI API key
             model: Model to use for generation
+            db_client: Instance of PostgresClient for db access
         """
+        self.db_client = db_client or self.instantiate_db_client()
         if not api_key:
             raise ValueError("OpenAI API key is required. Set it as an argument or as OPENAI_API_KEY environment variable.")
         
@@ -379,33 +391,22 @@ class AIEnrichmentEngine:
         logger.info(f"Completed full enrichment for {food_name}")
         return result
     
-    def enrich_directory(self, input_dir: str, output_dir: str, limit: Optional[int] = None) -> List[str]:
+    def enrich_directory(self, db_client: PostgresClient = None, limit: Optional[int] = None) -> List[str]:
         """
-        Enrich all food data files in a directory.
+        Enrich all food data items from database.
         
         Args:
-            input_dir: Directory with base food data
-            output_dir: Directory to save enriched data
+            db_client: Database client
             limit: Optional limit on number of files to process
-            
         Returns:
-            List of paths to enriched data files
+            List of enriched food ids
         """
-        os.makedirs(output_dir, exist_ok=True)
+        db_client = db_client or self.db_client
         
-        enriched_files = []
-        input_files = glob.glob(os.path.join(input_dir, "*.json"))
-        
-        # Apply limit if specified
-        if limit:
-            input_files = input_files[:limit]
-        
-        for input_file in input_files:
+        foods_to_enrich = db_client.get_all_foods_without_mental_health_impacts()
+        for food in foods_to_enrich:
             try:
-                with open(input_file, 'r') as f:
-                    food_data = json.load(f)
-                
-                enriched_data = self.fully_enrich_food(food_data)
+                enriched_data = self.fully_enrich_food(food)
                 
                 # Save enriched data
                 filename = os.path.basename(input_file)
@@ -414,36 +415,32 @@ class AIEnrichmentEngine:
                 with open(output_path, 'w') as f:
                     json.dump(enriched_data, f, indent=2)
                 
-                enriched_files.append(output_path)
-                logger.info(f"Enriched {input_file} -> {output_path}")
+                db_client.import_food_from_json(enriched_data)
+                
+                logger.info(f"Enriched {food.get('food_id')}")
                 
                 # Sleep between files to avoid rate limiting
                 time.sleep(2)
-                
             except Exception as e:
-                logger.error(f"Error processing {input_file}: {e}")
-        
-        return enriched_files
+                logger.error(f"Error processing {food.get('food_id')}: {e}")
+        return []
 
 
 def main():
     """Main function to execute the enrichment process."""
     parser = argparse.ArgumentParser(description="AI-Assisted Food Data Enrichment")
-    parser.add_argument("--input-dir", default=os.path.join("data", "processed", "base_foods"),
-                        help="Directory with base food data")
-    parser.add_argument("--output-dir", default=os.path.join("data", "enriched", "ai_generated"),
-                        help="Directory to save enriched data")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY"),  help="OpenAI API key (or set OPENAI_API_KEY environment variable)")
     parser.add_argument("--model", default="gpt-4", help="OpenAI model to use")
     parser.add_argument("--limit", type=int, help="Limit number of files to process")
     
     args = parser.parse_args()
-    
+    db_client = PostgresClient()
     try:
-        enricher = AIEnrichmentEngine(api_key=args.api_key, model=args.model)
-        logger.info(f"Processing files from {args.input_dir}")
-        enriched_files = enricher.enrich_directory(args.input_dir, args.output_dir, limit=args.limit)
-        logger.info(f"Successfully enriched {len(enriched_files)} files")
+        enricher = AIEnrichmentEngine(api_key=args.api_key, model=args.model, db_client = db_client)
+        logger.info(f"Processing files from database")
+        enriched_files = enricher.enrich_directory(db_client = db_client, limit=args.limit)
+        
+        logger.info(f"Successfully enriched {len(foods_to_enrich)} foods")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
 

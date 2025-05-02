@@ -16,8 +16,9 @@ import json
 import time
 import requests
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Optional
 from datetime import datetime
+from data.postgres_client import PostgresClient
 
 # Configure logging
 logging.basicConfig(
@@ -480,33 +481,31 @@ class OpenFoodFactsAPI:
             "citations": ["PMID:24182172"]
         }
     
-    def search_and_save(self, query: str, output_dir: str, limit: int = 10) -> List[str]:
+    def search_and_import(self, query: str, db_client: PostgresClient, limit: int = 10) -> List[str]:
         """
-        Search for products and save them to files.
+        Search for products and import them to the database.
         
         Args:
             query: Search term
-            output_dir: Directory to save results
+            db_client: Database client to import into
             limit: Maximum number of products to save
         
         Returns:
-            List of saved file paths
+            List of imported food IDs
         """
-        os.makedirs(output_dir, exist_ok=True)
-        
+        imported_foods = []
         try:
-            # Search for products
+            # Search for products based on query
             results = self.search_products(
                 query=query, 
                 page_size=min(limit, 100),  # API limit is 100
                 sort_by="popularity_score"
             )
             
-            saved_files = []
             count = 0
             
             for product in results.get("products", []):
-                if count >= limit:
+                if count >= limit: # Check if the limit has been reached
                     break
                 
                 # Get full product details
@@ -515,20 +514,14 @@ class OpenFoodFactsAPI:
                     transformed = self.transform_to_schema(product_data)
                     
                     if transformed:
-                        # Save to file
-                        filename = f"{transformed['food_id']}.json"
-                        file_path = os.path.join(output_dir, filename)
-                        
-                        with open(file_path, 'w') as f:
-                            json.dump(transformed, f, indent=2)
-                        
-                        saved_files.append(file_path)
-                        logger.info(f"Saved {transformed['name']} to {file_path}")
-                        
+                        # Import to DB
+                        food_id = db_client.import_food_from_json(transformed)
+                        imported_foods.append(food_id)
+                        logger.info(f"Imported {transformed['name']} to database")
+                                                
                         count += 1
                 except Exception as e:
-                    logger.error(f"Error processing product {product.get('code')}: {e}")
-            
+                    logger.error(f"Error processing product {product.get('code')}: {e}")            
             return saved_files
             
         except Exception as e:
@@ -542,22 +535,19 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch and transform OpenFoodFacts data")
     parser.add_argument("--query", help="Search term", default="")
     parser.add_argument("--categories", help="Categories to search for", default="")
-    parser.add_argument("--output-dir", default="data/raw/openfoodfacts", help="Output directory")
-    parser.add_argument("--limit", type=int, default=10, help="Maximum number of products to fetch")
     
     args = parser.parse_args()
     
+    # Instantiate database client
+    db_client = PostgresClient()
+
     api = OpenFoodFactsAPI(user_agent="NutritionalPsychiatryDataset/1.0")
     
     try:
-        saved_files = api.search_and_save(
-            query=args.query,
-            output_dir=args.output_dir,
-            limit=args.limit
-        )
+        imported_foods = api.search_and_import(
+            query=args.query, db_client=db_client, limit=args.limit)
         
-        logger.info(f"Successfully saved {len(saved_files)} products")
-        
+        logger.info(f"Successfully imported {len(imported_foods)} products: {imported_foods}")
     except Exception as e:
         logger.error(f"Error: {e}")
 

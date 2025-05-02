@@ -14,13 +14,14 @@ Features:
 - Multiple Source Support: Handles both PDF papers and web-based articles
 
 Based on nutritional psychiatry research methodology from:
-- Marx et al. (2021) - Nutritional Psychiatry: The Present State of the Evidence
 - Jacka et al. (2017) - The 'SMILES' trial
 - Firth et al. (2019) - Food and mood: how do diet and nutrition affect mental wellbeing?
 """
 
 import os
+from database.postgres import PostgresClient
 import json
+import sys
 import re
 import csv
 import logging
@@ -841,35 +842,23 @@ class SchemaConverter:
 class LiteratureExtractor:
     """Main class for extracting structured data from literature."""
     
-    def __init__(self, output_dir: str = "data/literature"):
+    def __init__(self, db_client: PostgresClient):
         """
         Initialize with necessary components.
         
         Args:
-            output_dir: Directory to save extracted data
+           db_client : Instance of the PostgresClient
         """
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        self.db_client = db_client
         
         # Initialize components
         self.nutrient_normalizer = NutrientNameNormalizer()
         self.evidence_classifier = EvidenceClassifier()
-        self.relationship_extractor = RelationshipExtractor(
-            self.nutrient_normalizer, self.evidence_classifier
-        )
+        self.relationship_extractor = RelationshipExtractor(self.nutrient_normalizer, self.evidence_classifier)
         self.pdf_extractor = PDFExtractor()
         self.web_extractor = WebPageExtractor()
         self.schema_converter = SchemaConverter()
-        
-        # Set up subdirectories
-        self.raw_dir = os.path.join(output_dir, "raw")
-        self.processed_dir = os.path.join(output_dir, "processed")
-        self.schema_dir = os.path.join(output_dir, "schema")
-        
-        os.makedirs(self.raw_dir, exist_ok=True)
-        os.makedirs(self.processed_dir, exist_ok=True)
-        os.makedirs(self.schema_dir, exist_ok=True)
-    
+            
     def process_pdf(self, pdf_path: str) -> Tuple[List[NutrientMoodRelationship], Dict]:
         """
         Process a PDF file and extract relationships.
@@ -888,30 +877,12 @@ class LiteratureExtractor:
         if not text or not metadata:
             logger.warning(f"Failed to extract text or metadata from {pdf_path}")
             return [], {}
-        
-        # Save raw text
-        filename = os.path.basename(pdf_path)
-        raw_path = os.path.join(self.raw_dir, f"{filename}.txt")
-        with open(raw_path, 'w', encoding='utf-8') as f:
-            f.write(text)
-        
+
         # Extract relationships
         relationships = self.relationship_extractor.extract_relationships(text, metadata)
         logger.info(f"Extracted {len(relationships)} relationships from {pdf_path}")
-        
-        # Save relationships
-        relationships_path = os.path.join(self.processed_dir, f"{filename}.json")
-        with open(relationships_path, 'w', encoding='utf-8') as f:
-            relationships_data = [r.to_dict() for r in relationships]
-            json.dump(relationships_data, f, indent=2)
-        
-        # Convert to schema format
         schema_data = self.schema_converter.relationships_to_schema(relationships)
-        
-        # Save schema data
-        schema_path = os.path.join(self.schema_dir, f"{filename}.json")
-        with open(schema_path, 'w', encoding='utf-8') as f:
-            json.dump(schema_data, f, indent=2)
+        self.db_client.import_literature_from_json(schema_data)
         
         return relationships, schema_data
     
@@ -933,24 +904,37 @@ class LiteratureExtractor:
         if not text or not metadata:
             logger.warning(f"Failed to extract text or metadata from {url}")
             return [], {}
-        
-        # Create filename from URL
-        filename = hashlib.md5(url.encode()).hexdigest()
-        
-        # Save raw text
-        raw_path = os.path.join(self.raw_dir, f"{filename}.txt")
-        with open(raw_path, 'w', encoding='utf-8') as f:
-            f.write(text)
-        
+
         # Extract relationships
         relationships = self.relationship_extractor.extract_relationships(text, metadata)
         logger.info(f"Extracted {len(relationships)} relationships from {url}")
-        
-        # Save relationships
-        relationships_path = os.path.join(self.processed_dir, f"{filename}.json")
-        with open(relationships_path, 'w', encoding='utf-8') as f:
-            relationships_data = [r.to_dict() for r in relationships]
-            json.dump(relationships_data, f, indent=2)
-        
-        # Convert to schema format
-        schema_data = self.schema_converter.rel
+
+        schema_data = self.schema_converter.relationships_to_schema(relationships)
+        self.db_client.import_literature_from_json(schema_data)
+        return relationships, schema_data
+
+
+def main():
+    """Main function to process literature."""
+    parser = argparse.ArgumentParser(description="Extract data from PDFs and URLs.")
+    parser.add_argument("--pdfs", nargs="*", help="List of PDF file paths")
+    parser.add_argument("--urls", nargs="*", help="List of URLs")
+    args = parser.parse_args()
+
+    # Initialize Postgres client
+    db_client = PostgresClient()
+
+    # Initialize LiteratureExtractor
+    extractor = LiteratureExtractor(db_client)
+
+    # Process PDFs
+    if args.pdfs:
+        for pdf_path in args.pdfs:
+            extractor.process_pdf(pdf_path)
+    if args.urls:
+        for url in args.urls:
+            extractor.process_url(url)
+
+if __name__ == "__main__":
+    main()
+
