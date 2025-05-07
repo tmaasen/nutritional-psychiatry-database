@@ -10,6 +10,17 @@ from utils.config_utils import get_config
 from scripts.data_collection.base_api_client import BaseAPIClient
 from data.postgres_client import PostgresClient
 from utils.nutrient_converter import NutrientConverter
+from constants.food_data_constants import (
+    OFF_STANDARD_NUTRIENTS_MAPPING,
+    OFF_BRAIN_NUTRIENTS_MAPPING,
+    OFF_OMEGA3_MAPPING,
+    FOOD_CATEGORY_MAPPING,
+    NUTRIENTS_G_TO_MG,
+    NUTRIENTS_G_TO_MCG,
+    ANTI_INFLAMMATORY_NUTRIENTS,
+    PRO_INFLAMMATORY_NUTRIENTS,
+    DEFAULT_CONFIDENCE_RATINGS
+)
 
 # Initialize logger
 logger = setup_logging(__name__)
@@ -21,75 +32,12 @@ class FoodDataTransformer:
     """Transforms OpenFoodFacts data to the nutritional psychiatry schema."""
     
     def __init__(self, nutrient_mappings: Dict = None):
-        """
-        Initialize the transformer with nutrient mappings.
-        
-        Args:
-            nutrient_mappings: Dictionary of nutrient mappings
-        """
-        # Load default mappings if none provided
-        self.nutrient_mappings = nutrient_mappings or self._get_default_mappings()
-    
-    def _get_default_mappings(self) -> Dict:
-        """Get default nutrient mappings."""
-        return {
-            "standard_nutrients": {
-                "energy-kcal_100g": "calories",
-                "proteins_100g": "protein_g",
-                "carbohydrates_100g": "carbohydrates_g",
-                "fat_100g": "fat_g",
-                "fiber_100g": "fiber_g",
-                "sugars_100g": "sugars_g",
-                "calcium_100g": "calcium_mg",
-                "iron_100g": "iron_mg",
-                "magnesium_100g": "magnesium_mg",
-                "phosphorus_100g": "phosphorus_mg",
-                "potassium_100g": "potassium_mg",
-                "sodium_100g": "sodium_mg",
-                "zinc_100g": "zinc_mg",
-                "copper_100g": "copper_mg",
-                "manganese_100g": "manganese_mg",
-                "selenium_100g": "selenium_mcg",
-                "vitamin-c_100g": "vitamin_c_mg",
-                "vitamin-a_100g": "vitamin_a_iu"
-            },
-            "brain_nutrients": {
-                "tryptophan_100g": "tryptophan_mg",
-                "tyrosine_100g": "tyrosine_mg",
-                "vitamin-b6_100g": "vitamin_b6_mg",
-                "folates_100g": "folate_mcg",
-                "vitamin-b12_100g": "vitamin_b12_mcg",
-                "vitamin-d_100g": "vitamin_d_mcg",
-                "magnesium_100g": "magnesium_mg",
-                "zinc_100g": "zinc_mg",
-                "iron_100g": "iron_mg",
-                "selenium_100g": "selenium_mcg",
-                "choline_100g": "choline_mg"
-            },
-            "omega3": {
-                "omega-3-fat_100g": "total_g",
-                "dha_100g": "dha_mg",
-                "epa_100g": "epa_mg",
-                "ala_100g": "ala_mg"
-            },
-            "category_mapping": {
-                "fruits": "Fruits",
-                "vegetables": "Vegetables",
-                "meat": "Protein Foods",
-                "fish": "Protein Foods",
-                "seafood": "Protein Foods",
-                "legumes": "Protein Foods",
-                "dairy": "Dairy",
-                "cereals": "Grains",
-                "grains": "Grains",
-                "breads": "Grains",
-                "nuts": "Nuts and Seeds",
-                "seeds": "Nuts and Seeds",
-                "beverages": "Beverages",
-                "sweets": "Sweets",
-                "fast-food": "Processed Foods"
-            }
-        }
+        """Initialize the transformer with nutrient mappings."""
+        # If custom mappings provided, use them, otherwise use constants
+        self.standard_nutrients_mapping = nutrient_mappings.get("standard_nutrients") if nutrient_mappings else OFF_STANDARD_NUTRIENTS_MAPPING
+        self.brain_nutrients_mapping = nutrient_mappings.get("brain_nutrients") if nutrient_mappings else OFF_BRAIN_NUTRIENTS_MAPPING
+        self.omega3_mapping = nutrient_mappings.get("omega3") if nutrient_mappings else OFF_OMEGA3_MAPPING
+        self.category_mapping = nutrient_mappings.get("category_mapping") if nutrient_mappings else FOOD_CATEGORY_MAPPING
     
     def transform_to_schema(self, off_product: Dict) -> Dict:
         """
@@ -219,17 +167,15 @@ class FoodDataTransformer:
         """Extract standard nutrients from OFF nutriments data."""
         standard_nutrients = {}
         
-        for off_name, schema_name in self.nutrient_mappings["standard_nutrients"].items():
+        for off_name, schema_name in self.standard_nutrients_mapping.items():
             if off_name in nutriments and nutriments[off_name] is not None:
                 value = nutriments[off_name]
                 
                 # Unit conversions if needed
-                if off_name in ["calcium_100g", "iron_100g", "magnesium_100g", 
-                               "phosphorus_100g", "potassium_100g", "sodium_100g",
-                               "zinc_100g", "copper_100g", "manganese_100g"]:
+                if off_name in NUTRIENTS_G_TO_MG:
                     value = NutrientConverter.g_to_mg(value)
                 
-                elif off_name == "selenium_100g":
+                elif off_name in NUTRIENTS_G_TO_MCG:
                     value = NutrientConverter.g_to_mcg(value)
                 
                 standard_nutrients[schema_name] = value

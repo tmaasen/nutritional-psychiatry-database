@@ -44,35 +44,6 @@ class AIEnrichmentEngine:
         """
         return PostgresClient()
     
-    # Default brain nutrients to predict if not in USDA data
-    BRAIN_NUTRIENTS_TO_PREDICT = [
-        "tryptophan_mg",
-        "tyrosine_mg",
-        "vitamin_b6_mg",
-        "folate_mcg",
-        "vitamin_b12_mcg",
-        "vitamin_d_mcg",
-        "magnesium_mg",
-        "zinc_mg",
-        "iron_mg",
-        "selenium_mcg",
-        "choline_mg",
-        "omega3.total_g",
-        "omega3.epa_mg",
-        "omega3.dha_mg",
-        "omega3.ala_mg"
-    ]
-    
-    # Default bioactive compounds to predict
-    BIOACTIVE_COMPOUNDS_TO_PREDICT = [
-        "polyphenols_mg",
-        "flavonoids_mg",
-        "anthocyanins_mg",
-        "carotenoids_mg",
-        "probiotics_cfu",
-        "prebiotic_fiber_g"
-    ]
-    
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", db_client: PostgresClient = None):
         """
         Initialize the AI enrichment engine.

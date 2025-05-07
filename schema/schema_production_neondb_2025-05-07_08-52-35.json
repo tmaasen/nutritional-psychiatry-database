@@ -1,0 +1,1117 @@
+[{
+  "table_name": "bioactive_compounds",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "polyphenols_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "flavonoids_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "anthocyanins_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "carotenoids_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "probiotics_cfu",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "bioactive_compounds",
+  "column_name": "prebiotic_fiber_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "tryptophan_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "tyrosine_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "vitamin_b6_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "folate_mcg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "vitamin_b12_mcg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "vitamin_d_mcg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "magnesium_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "zinc_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "iron_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "selenium_mcg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "brain_nutrients",
+  "column_name": "choline_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "contextual_factors",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "contextual_factors",
+  "column_name": "circadian_effects",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "contextual_factors",
+  "column_name": "food_combinations",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "contextual_factors",
+  "column_name": "preparation_effects",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "data_quality",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "data_quality",
+  "column_name": "completeness",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "data_quality",
+  "column_name": "overall_confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "data_quality",
+  "column_name": "brain_nutrients_source",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "data_quality",
+  "column_name": "impacts_source",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "data_quality",
+  "column_name": "source_priority",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "dietary_patterns",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('dietary_patterns_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "dietary_patterns",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "dietary_patterns",
+  "column_name": "pattern_name",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "dietary_patterns",
+  "column_name": "pattern_contribution",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "dietary_patterns",
+  "column_name": "mental_health_relevance",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('foods_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "foods",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "name",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "description",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "category",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 100,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "created_at",
+  "data_type": "timestamp without time zone",
+  "column_default": "CURRENT_TIMESTAMP",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "foods",
+  "column_name": "updated_at",
+  "data_type": "timestamp without time zone",
+  "column_default": "CURRENT_TIMESTAMP",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "inflammatory_index",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "inflammatory_index",
+  "column_name": "value",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "inflammatory_index",
+  "column_name": "confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "inflammatory_index",
+  "column_name": "calculation_method",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "inflammatory_index",
+  "column_name": "citations",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('mental_health_impacts_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "impact_type",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 100,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "direction",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "mechanism",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "strength",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "time_to_effect",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "research_context",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "mental_health_impacts",
+  "column_name": "notes",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "metadata",
+  "column_name": "version",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "created",
+  "data_type": "timestamp without time zone",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "last_updated",
+  "data_type": "timestamp without time zone",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "image_url",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "source_urls",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "source_ids",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "metadata",
+  "column_name": "tags",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('neural_targets_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "neural_targets",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "pathway",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "effect",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "mechanisms",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "neural_targets",
+  "column_name": "mental_health_relevance",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('nutrient_interactions_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "interaction_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 100,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "interaction_type",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "pathway",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "mechanism",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "mental_health_relevance",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "nutrients_involved",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "research_support",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "nutrient_interactions",
+  "column_name": "foods_demonstrating",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "total_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "epa_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "dha_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "ala_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "omega3_fatty_acids",
+  "column_name": "confidence",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "population_variations",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('population_variations_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "population_variations",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "population_variations",
+  "column_name": "population",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "population_variations",
+  "column_name": "description",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "population_variations",
+  "column_name": "variations",
+  "data_type": "jsonb",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "id",
+  "data_type": "integer",
+  "column_default": "nextval('research_support_id_seq'::regclass)",
+  "is_nullable": "NO",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "research_support",
+  "column_name": "impact_id",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "citation",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "doi",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "url",
+  "data_type": "text",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "study_type",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 100,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "research_support",
+  "column_name": "year",
+  "data_type": "integer",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "serving_info",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "serving_info",
+  "column_name": "serving_size",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "serving_info",
+  "column_name": "serving_unit",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 50,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "serving_info",
+  "column_name": "household_serving",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "food_id",
+  "data_type": "character varying",
+  "column_default": null,
+  "is_nullable": "NO",
+  "character_maximum_length": 255,
+  "column_description": null,
+  "key_type": "PK"
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "calories",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "protein_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "carbohydrates_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "fat_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "fiber_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "sugars_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "sugars_added_g",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "calcium_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "iron_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "magnesium_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "phosphorus_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "potassium_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "sodium_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "zinc_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "copper_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "manganese_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "selenium_mcg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "vitamin_c_mg",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}, {
+  "table_name": "standard_nutrients",
+  "column_name": "vitamin_a_iu",
+  "data_type": "numeric",
+  "column_default": null,
+  "is_nullable": "YES",
+  "character_maximum_length": null,
+  "column_description": null,
+  "key_type": ""
+}]
