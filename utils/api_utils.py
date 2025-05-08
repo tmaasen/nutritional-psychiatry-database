@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-
 def make_request(
     url: str,
     params: Optional[Dict[str, Any]] = None,

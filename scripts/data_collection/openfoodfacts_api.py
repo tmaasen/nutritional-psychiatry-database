@@ -12,20 +12,16 @@ import time
 from typing import Dict, List, Optional, Any, Union
 
 # Import utility modules
-from models.schema_validator import SchemaValidator
+from schema.schema_validator import SchemaValidator
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.api_utils import make_request
 from utils.logging_utils import setup_logging
-from utils.config_utils import get_config
 from scripts.data_collection.base_api_client import BaseAPIClient
 from data.postgres_client import PostgresClient
 from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT, BIOACTIVE_COMPOUNDS_TO_PREDICT
 
 # Initialize logger
 logger = setup_logging(__name__)
-
-# Load configuration
-config = get_config()
 
 class OpenFoodFactsClient:
     """Client for the OpenFoodFacts API, handles only API interactions."""
@@ -39,7 +35,7 @@ class OpenFoodFactsClient:
             base_url: Base URL for API requests
         """
         self.user_agent = user_agent or "NutritionalPsychiatryDataset/1.0"
-        self.base_url = base_url or config.get_api_url("OPENFOODFACTS") or "https://world.openfoodfacts.org/api/v2"
+        self.base_url = base_url or "https://world.openfoodfacts.org/api/v2"
         self.headers = {"User-Agent": self.user_agent}
     
     def search_products(self, 

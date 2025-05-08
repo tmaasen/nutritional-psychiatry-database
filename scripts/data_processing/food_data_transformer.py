@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Any, Union
 # Import utility modules
 from utils.api_utils import make_request
 from utils.logging_utils import setup_logging
-from utils.config_utils import get_config
 from scripts.data_collection.base_api_client import BaseAPIClient
 from data.postgres_client import PostgresClient
 from utils.nutrient_converter import NutrientConverter
@@ -24,9 +23,6 @@ from constants.food_data_constants import (
 
 # Initialize logger
 logger = setup_logging(__name__)
-
-# Load configuration
-config = get_config()
 
 class FoodDataTransformer:
     """Transforms OpenFoodFacts data to the nutritional psychiatry schema."""

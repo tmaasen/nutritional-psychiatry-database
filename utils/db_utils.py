@@ -1,10 +1,16 @@
-# utils/db_utils.py
+#!/usr/bin/env python3
 """
 Database utilities for the Nutritional Psychiatry Dataset project.
+
+This module provides utilities for database connection management, query execution,
+and data import/export operations.
 """
 
+import os
+import json
 import logging
-from typing import Dict, List, Any, Optional, Union
+import time
+from typing import Dict, List, Any, Optional, Union, Tuple
 from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
@@ -13,153 +19,300 @@ from psycopg2 import pool
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-def create_connection_pool(
-    connection_string: str,
-    min_connections: int = 1,
-    max_connections: int = 10
-) -> pool.ThreadedConnectionPool:
+class PostgresClient:
     """
-    Create a PostgreSQL connection pool.
+    Client for interacting with PostgreSQL databases.
     
-    Args:
-        connection_string: PostgreSQL connection string
-        min_connections: Minimum number of connections
-        max_connections: Maximum number of connections
-    
-    Returns:
-        ThreadedConnectionPool instance
-    
-    Raises:
-        psycopg2.OperationalError: If connection fails
+    Features:
+    - Connection pooling
+    - Context managers for connections and cursors
+    - Query execution with error handling
+    - Data import/export methods
     """
-    try:
-        connection_pool = pool.ThreadedConnectionPool(
-            min_connections,
-            max_connections,
-            connection_string
-        )
-        logger.info(f"Created connection pool with {min_connections}-{max_connections} connections")
-        return connection_pool
-    except Exception as e:
-        logger.error(f"Failed to create connection pool: {e}")
-        raise
-
-@contextmanager
-def get_connection(connection_pool: pool.ThreadedConnectionPool, cursor_factory=None):
-    """
-    Get a connection from the pool.
     
-    Args:
-        connection_pool: ThreadedConnectionPool instance
-        cursor_factory: Optional cursor factory
-    
-    Yields:
-        Connection object
-    """
-    connection = None
-    try:
-        connection = connection_pool.getconn()
-        if cursor_factory:
-            connection.cursor_factory = cursor_factory
-        yield connection
-    finally:
-        if connection:
-            connection_pool.putconn(connection)
-
-@contextmanager
-def get_cursor(connection_pool: pool.ThreadedConnectionPool, cursor_factory=RealDictCursor):
-    """
-    Get a database cursor.
-    
-    Args:
-        connection_pool: ThreadedConnectionPool instance
-        cursor_factory: Cursor factory
-    
-    Yields:
-        Cursor object
-    """
-    with get_connection(connection_pool) as connection:
-        cursor = connection.cursor(cursor_factory=cursor_factory)
+    def __init__(
+        self,
+        connection_string: Optional[str] = None,
+        min_connections: int = 1,
+        max_connections: int = 10
+    ):
+        """
+        Initialize the database client.
+        
+        Args:
+            connection_string: PostgreSQL connection string (defaults to environment)
+            min_connections: Minimum number of connections in the pool
+            max_connections: Maximum number of connections in the pool
+        """
+        # Use provided connection string or build from environment variables
+        if not connection_string:
+            connection_string = self._build_connection_string_from_env()
+        
+        self.connection_string = connection_string
+        
+        # Initialize connection pool
         try:
-            yield cursor
-            connection.commit()
+            self.connection_pool = pool.ThreadedConnectionPool(
+                min_connections,
+                max_connections,
+                connection_string
+            )
+            logger.info(f"Initialized connection pool with {min_connections}-{max_connections} connections")
         except Exception as e:
-            connection.rollback()
-            logger.error(f"Database error: {e}")
+            logger.error(f"Failed to initialize connection pool: {e}")
             raise
+    
+    def _build_connection_string_from_env(self) -> str:
+        """Build connection string from environment variables."""
+        from utils import get_env
+        
+        db_host = get_env("DB_HOST")
+        db_port = get_env("DB_PORT", "5432")
+        db_name = get_env("DB_NAME")
+        db_user = get_env("DB_USER")
+        db_password = get_env("DB_PASSWORD")
+        
+        if not all([db_host, db_name, db_user, db_password]):
+            raise ValueError("Database connection details not found in environment variables")
+        
+        # Determine SSL mode
+        sslmode = get_env("DB_SSLMODE", "require")
+        
+        return (f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+                f"?sslmode={sslmode}")
+    
+    @contextmanager
+    def get_connection(self, cursor_factory=None):
+        """
+        Get a connection from the pool.
+        
+        Args:
+            cursor_factory: Optional cursor factory
+            
+        Yields:
+            Connection object
+        """
+        connection = None
+        try:
+            connection = self.connection_pool.getconn()
+            if cursor_factory:
+                connection.cursor_factory = cursor_factory
+            yield connection
         finally:
-            cursor.close()
-
-def execute_query(
-    cursor: RealDictCursor,
-    query: str,
-    params: Optional[tuple] = None,
-    fetch: bool = True
-) -> Union[List[Dict], int]:
-    """
-    Execute a database query with proper error handling.
+            if connection:
+                self.connection_pool.putconn(connection)
     
-    Args:
-        cursor: Database cursor
-        query: SQL query string
-        params: Query parameters
-        fetch: Whether to fetch results
+    @contextmanager
+    def get_cursor(self, cursor_factory=RealDictCursor):
+        """
+        Get a database cursor.
+        
+        Args:
+            cursor_factory: Cursor factory
+            
+        Yields:
+            Cursor object
+        """
+        with self.get_connection() as connection:
+            cursor = connection.cursor(cursor_factory=cursor_factory)
+            try:
+                yield cursor
+                connection.commit()
+            except Exception as e:
+                connection.rollback()
+                logger.error(f"Database error: {e}")
+                raise
+            finally:
+                cursor.close()
     
-    Returns:
-        Query results or number of affected rows
-    """
-    try:
-        cursor.execute(query, params)
-        if fetch:
-            return cursor.fetchall()
-        return cursor.rowcount
-    except Exception as e:
-        logger.error(f"Query execution failed: {e}")
-        raise
-
-def batch_insert(
-    cursor: RealDictCursor,
-    table: str,
-    columns: List[str],
-    values: List[tuple],
-    page_size: int = 100
-) -> int:
-    """
-    Perform a batch insert operation.
+    def close(self):
+        """Close the connection pool."""
+        if hasattr(self, 'connection_pool'):
+            self.connection_pool.closeall()
+            logger.info("Closed connection pool")
     
-    Args:
-        cursor: Database cursor
-        table: Table name
-        columns: Column names
-        values: List of value tuples
-        page_size: Number of rows per insert
+    def execute_query(
+        self, 
+        query: str, 
+        params: Optional[Union[Tuple, Dict]] = None, 
+        fetch: bool = True
+    ) -> Union[List[Dict], int]:
+        """
+        Execute a database query with proper error handling.
+        
+        Args:
+            query: SQL query
+            params: Query parameters
+            fetch: Whether to fetch results
+            
+        Returns:
+            Query results or number of affected rows
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(query, params or ())
+                if fetch:
+                    return cursor.fetchall()
+                return cursor.rowcount
+        except Exception as e:
+            logger.error(f"Query execution failed: {e}")
+            raise
     
-    Returns:
-        Number of rows inserted
-    """
-    try:
-        return execute_values(
-            cursor,
-            f"INSERT INTO {table} ({','.join(columns)}) VALUES %s",
-            values,
-            page_size=page_size,
-            fetch=False
-        )
-    except Exception as e:
-        logger.error(f"Batch insert failed: {e}")
-        raise
-
-def validate_schema(data: Dict[str, Any], schema: Dict[str, Any]) -> List[str]:
-    """
-    Validate data against a schema.
+    def batch_insert(
+        self, 
+        table: str, 
+        columns: List[str], 
+        values: List[Tuple], 
+        page_size: int = 100
+    ) -> int:
+        """
+        Perform a batch insert operation.
+        
+        Args:
+            table: Table name
+            columns: Column names
+            values: List of value tuples
+            page_size: Number of rows per insert
+            
+        Returns:
+            Number of rows inserted
+        """
+        try:
+            with self.get_cursor() as cursor:
+                return execute_values(
+                    cursor,
+                    f"INSERT INTO {table} ({','.join(columns)}) VALUES %s",
+                    values,
+                    page_size=page_size
+                )
+        except Exception as e:
+            logger.error(f"Batch insert failed: {e}")
+            raise
     
-    Args:
-        data: Data to validate
-        schema: Schema definition
+    # Food retrieval methods
     
-    Returns:
-        List of validation errors
-    """
-    errors = []
-    # TODO: Implement schema validation
-    return errors 
+    def get_food_by_id(self, food_id: str) -> Optional[Dict]:
+        """
+        Get a complete food profile by ID.
+        
+        Args:
+            food_id: Food ID (e.g., "usda_173950")
+            
+        Returns:
+            Complete food data dictionary or None if not found
+        """
+        try:
+            return self.execute_query(
+                "SELECT get_complete_food_profile(%s) AS food_data",
+                (food_id,)
+            )[0]['food_data']
+        except Exception as e:
+            logger.error(f"Error getting food {food_id}: {e}")
+            raise
+    
+    # Additional food-specific methods...
+    
+    # Data import/export methods for migration and backup only
+    
+    def import_food_from_json(self, food_json: Union[Dict, str]) -> str:
+        """
+        Import a food from JSON data.
+        
+        Args:
+            food_json: Food data as dictionary or JSON string
+            
+        Returns:
+            Food ID of the imported food
+        """
+        try:
+            # Convert string to dict if needed
+            if isinstance(food_json, str):
+                food_data = json.loads(food_json)
+            else:
+                food_data = food_json
+            
+            # Convert dict to JSON string for Postgres function
+            json_str = json.dumps(food_data)
+            
+            result = self.execute_query(
+                "SELECT import_food_from_json(%s::jsonb) AS food_id",
+                (json_str,)
+            )[0]
+            
+            food_id = result['food_id']
+            logger.info(f"Imported food with ID: {food_id}")
+            return food_id
+                
+        except Exception as e:
+            logger.error(f"Error importing food from JSON: {e}")
+            raise
+    
+    def export_food_to_json(self, food_id: str) -> Dict:
+        """
+        Export a food to JSON format.
+        
+        Args:
+            food_id: Food ID to export
+            
+        Returns:
+            Food data dictionary
+        """
+        try:
+            food_data = self.get_food_by_id(food_id)
+            
+            if not food_data:
+                raise ValueError(f"Food with ID {food_id} not found")
+            
+            return food_data
+            
+        except Exception as e:
+            logger.error(f"Error exporting food {food_id}: {e}")
+            raise
+    
+    # Emergency file-based operations
+    # These methods are for migration/backup only and should be used sparingly
+    
+    def backup_to_file(self, food_id: str, file_path: str) -> None:
+        """
+        Backup a food to a local file (for migration/emergency use only).
+        
+        Args:
+            food_id: Food ID to export
+            file_path: File path to save JSON
+        """
+        logger.warning("Using local file backup - not recommended for production")
+        
+        try:
+            food_data = self.export_food_to_json(food_id)
+            
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'w') as f:
+                json.dump(food_data, f, indent=2)
+                
+            logger.info(f"Backed up food {food_id} to {file_path}")
+            
+        except Exception as e:
+            logger.error(f"Error backing up food {food_id}: {e}")
+            raise
+    
+    def restore_from_file(self, file_path: str) -> str:
+        """
+        Restore a food from a local file (for migration/emergency use only).
+        
+        Args:
+            file_path: File path to load JSON from
+            
+        Returns:
+            Food ID of the imported food
+        """
+        logger.warning("Using local file restore - not recommended for production")
+        
+        try:
+            with open(file_path, 'r') as f:
+                food_data = json.load(f)
+            
+            return self.import_food_from_json(food_data)
+            
+        except Exception as e:
+            logger.error(f"Error restoring from file {file_path}: {e}")
+            raise

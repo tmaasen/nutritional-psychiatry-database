@@ -5,7 +5,6 @@ Base API client for the Nutritional Psychiatry Dataset project.
 import logging
 from typing import Dict, Any, Optional, List
 from utils.api_utils import make_request
-from utils.config_utils import get_api_config
 from data.postgres_client import PostgresClient
 
 # Initialize logger
