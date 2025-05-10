@@ -318,3 +318,24 @@ MECHANISM_EXTRACT_LENGTH = 100
 # Literature data quality constants
 LITERATURE_CONFIDENCE_DEFAULT = 7  # Default confidence for literature-derived data
 LITERATURE_COMPLETENESS_DEFAULT = 0.5  # Default completeness score for literature data
+
+# Source priority by section
+SOURCE_PRIORITY_MAPPING = {
+    "standard_nutrients": ["usda", "openfoodfacts", "literature", "ai_generated"],
+    "brain_nutrients": ["literature", "usda", "openfoodfacts", "ai_generated"],
+    "bioactive_compounds": ["literature", "openfoodfacts", "usda", "ai_generated"],
+    "mental_health_impacts": ["literature", "ai_generated"],
+    "nutrient_interactions": ["literature", "ai_generated"],
+    "inflammatory_index": ["literature", "openfoodfacts", "ai_generated"]
+}
+
+# Confidence thresholds for considering a source
+SOURCE_CONFIDENCE_THRESHOLDS = {
+    "usda": 0,  # Always trust USDA
+    "openfoodfacts": 6,  # Decent confidence
+    "literature": 0,  # Always trust literature
+    "ai_generated": 7  # High confidence for AI
+}
+
+# Field names for source tracking
+SOURCE_PRIORITY_FIELD = "source_priority"

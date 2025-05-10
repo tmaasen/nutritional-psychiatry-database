@@ -1,47 +1,54 @@
 #!/usr/bin/env python3
 """
-Source Prioritization Script
+Source Prioritization System
 Compares and merges data from different sources (USDA, OpenFoodFacts) with intelligent prioritization.
 """
 
-import os
-import json
-import glob
-import logging
-from typing import Dict, List, Any, Optional, Tuple
+import argparse
 from datetime import datetime
+import sys
+from typing import Dict, List, Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Import schema models
+from schema.food_data import (
+    FoodData, StandardNutrients, BrainNutrients, Omega3, BioactiveCompounds,
+    MentalHealthImpact, ResearchSupport, NutrientInteraction, DataQuality,
+    SourcePriority, Metadata
 )
-logger = logging.getLogger(__name__)
+
+# Import utilities
+from utils.logging_utils import setup_logging
+from utils.db_utils import PostgresClient
+from utils.merge_utils import calculate_completeness
+
+# Import constants
+from constants.food_data_constants import (
+    SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
+)
+
+# Initialize logger
+logger = setup_logging(__name__)
 
 class SourcePrioritizer:
     """
     Prioritizes and merges data from multiple sources based on data quality.
     """
     
-    def __init__(self):
-        """Initialize the prioritizer."""
-        # Default source priorities (can be overridden per field)
-        self.default_priorities = {
-            "standard_nutrients": ["usda", "openfoodfacts", "literature", "ai_generated"],
-            "brain_nutrients": ["literature", "usda", "openfoodfacts", "ai_generated"],
-            "bioactive_compounds": ["literature", "openfoodfacts", "usda", "ai_generated"],
-            "mental_health_impacts": ["literature", "ai_generated"],
-            "nutrient_interactions": ["literature", "ai_generated"],
-            "inflammatory_index": ["literature", "openfoodfacts", "ai_generated"]
-        }
+    def __init__(self, db_client: Optional[PostgresClient] = None):
+        """
+        Initialize the prioritizer.
+        
+        Args:
+            db_client: Optional database client
+        """
+        # Use provided database client or create a new one
+        self.db_client = db_client or PostgresClient()
+        
+        # Default source priorities (from constants)
+        self.default_priorities = SOURCE_PRIORITY_MAPPING
         
         # Confidence thresholds for considering a source
-        self.confidence_thresholds = {
-            "usda": 0,  # Always trust USDA
-            "openfoodfacts": 6,  # Decent confidence
-            "literature": 0,  # Always trust literature
-            "ai_generated": 7  # High confidence for AI
-        }
+        self.confidence_thresholds = SOURCE_CONFIDENCE_THRESHOLDS
     
     def identify_source(self, food_data: Dict) -> str:
         """
@@ -123,13 +130,12 @@ class SourcePrioritizer:
         # Default to overall confidence
         return data_quality.get("overall_confidence", 5)
     
-    def merge_food_data(self, food_entries: List[Dict], output_file: Optional[str] = None) -> Dict:
+    def merge_food_data(self, food_entries: List[Dict]) -> Dict:
         """
         Merge food data from multiple sources with intelligent prioritization.
         
         Args:
             food_entries: List of food data dictionaries from different sources
-            output_file: Optional path to save merged data
             
         Returns:
             Merged food data dictionary
@@ -174,17 +180,12 @@ class SourcePrioritizer:
         merged["metadata"] = self._create_merged_metadata(merged, food_entries)
         
         # Update data quality section
-        merged["data_quality"]["source_priority"] = source_priority
+        if "data_quality" not in merged:
+            merged["data_quality"] = {}
+        merged["data_quality"][SOURCE_PRIORITY_FIELD] = source_priority
         
         # Calculate new completeness score
-        merged["data_quality"]["completeness"] = self._calculate_merged_completeness(merged)
-        
-        # Save to file if requested
-        if output_file:
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
-            with open(output_file, 'w') as f:
-                json.dump(merged, f, indent=2)
-            logger.info(f"Saved merged data to {output_file}")
+        merged["data_quality"]["completeness"] = calculate_completeness(merged)
         
         return merged
     
@@ -624,235 +625,161 @@ class SourcePrioritizer:
         
         return metadata
     
-    def _calculate_merged_completeness(self, merged: Dict) -> float:
-        """Calculate completeness score for merged data."""
-        # Count sections with data
-        total_sections = 0
-        filled_sections = 0
-        
-        # Standard nutrients
-        standard_nutrients = merged.get("standard_nutrients", {})
-        if standard_nutrients:
-            total_sections += 1
-            filled_sections += 1
-            
-            # Key nutrients we expect
-            key_nutrients = [
-                "calories", "protein_g", "carbohydrates_g", "fat_g", 
-                "fiber_g", "sugars_g"
-            ]
-            total_sections += len(key_nutrients)
-            filled_sections += sum(1 for n in key_nutrients 
-                                  if n in standard_nutrients and standard_nutrients[n] is not None)
-        
-        # Brain nutrients
-        brain_nutrients = merged.get("brain_nutrients", {})
-        if brain_nutrients:
-            total_sections += 1
-            filled_sections += 1
-            
-            # Key brain nutrients
-            key_brain_nutrients = [
-                "tryptophan_mg", "vitamin_b6_mg", "folate_mcg", 
-                "vitamin_b12_mcg", "vitamin_d_mcg", "magnesium_mg"
-            ]
-            total_sections += len(key_brain_nutrients)
-            filled_sections += sum(1 for n in key_brain_nutrients 
-                                 if n in brain_nutrients and brain_nutrients[n] is not None)
-            
-            # Omega-3
-            if "omega3" in brain_nutrients:
-                total_sections += 1
-                filled_sections += 1
-                
-                # Key omega-3 components
-                omega3_components = ["total_g", "epa_mg", "dha_mg", "ala_mg"]
-                total_sections += len(omega3_components)
-                filled_sections += sum(1 for c in omega3_components 
-                                     if c in brain_nutrients["omega3"] and 
-                                     brain_nutrients["omega3"][c] is not None)
-        
-        # Bioactive compounds
-        bioactive_compounds = merged.get("bioactive_compounds", {})
-        if bioactive_compounds:
-            total_sections += 1
-            filled_sections += min(1, len(bioactive_compounds))
-        
-        # Mental health impacts
-        mental_health_impacts = merged.get("mental_health_impacts", [])
-        if mental_health_impacts:
-            total_sections += 1
-            filled_sections += min(1, len(mental_health_impacts))
-        
-        # Nutrient interactions
-        nutrient_interactions = merged.get("nutrient_interactions", [])
-        if nutrient_interactions:
-            total_sections += 1
-            filled_sections += min(1, len(nutrient_interactions))
-        
-        # Inflammatory index
-        if "inflammatory_index" in merged and merged["inflammatory_index"]:
-            total_sections += 1
-            filled_sections += 1
-        
-        # Calculate completeness
-        if total_sections > 0:
-            return round(filled_sections / total_sections, 2)
-        return 0.0
-    
-    def merge_directory(self, 
-                        usda_dir: str, 
-                        openfoodfacts_dir: str,
-                        literature_dir: Optional[str] = None,
-                        ai_dir: Optional[str] = None,
-                        output_dir: str = "data/enriched/merged") -> List[str]:
+    def merge_foods_by_name(self, food_name: str) -> Optional[str]:
         """
-        Merge food data from different source directories.
+        Merge all foods with a similar name from different sources.
         
         Args:
-            usda_dir: Directory with USDA food data
-            openfoodfacts_dir: Directory with OpenFoodFacts data
-            literature_dir: Optional directory with literature-derived data
-            ai_dir: Optional directory with AI-generated data
-            output_dir: Directory to save merged data
+            food_name: Food name to match
             
         Returns:
-            List of paths to merged data files
+            ID of merged food or None if failed
         """
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Find matching foods across sources
-        merged_files = []
-        
-        # Get USDA files
-        usda_files = glob.glob(os.path.join(usda_dir, "*.json"))
-        
-        for usda_file in usda_files:
-            try:
-                with open(usda_file, 'r') as f:
-                    usda_data = json.load(f)
-                
-                # Get USDA food name
-                food_name = usda_data.get("name", "").lower()
-                if not food_name:
-                    continue
-                
-                # Find matching OpenFoodFacts entry
-                off_match = self._find_matching_entry(food_name, openfoodfacts_dir)
-                
-                # Find matching literature entry
-                lit_match = None
-                if literature_dir:
-                    lit_match = self._find_matching_entry(food_name, literature_dir)
-                
-                # Find matching AI entry
-                ai_match = None
-                if ai_dir:
-                    ai_match = self._find_matching_entry(food_name, ai_dir)
-                
-                # Collect all entries
-                entries = [usda_data]
-                if off_match:
-                    entries.append(off_match)
-                if lit_match:
-                    entries.append(lit_match)
-                if ai_match:
-                    entries.append(ai_match)
-                
-                # Skip if only one source
-                if len(entries) <= 1:
-                    continue
-                
-                # Create output filename
-                basename = os.path.basename(usda_file)
-                output_file = os.path.join(output_dir, basename)
-                
-                # Merge entries
-                merged = self.merge_food_data(entries, output_file)
-                if merged:
-                    merged_files.append(output_file)
-                    logger.info(f"Merged data for {food_name}")
+        try:
+            # Find similar foods in database
+            sources = ["usda", "openfoodfacts", "literature", "ai_generated"]
+            food_entries = []
             
-            except Exception as e:
-                logger.error(f"Error processing {usda_file}: {e}")
-        
-        return merged_files
-    
-    def _find_matching_entry(self, food_name: str, directory: str) -> Optional[Dict]:
-        """Find matching entry in directory based on food name similarity."""
-        if not os.path.isdir(directory):
+            for source in sources:
+                # Query foods by name and source type
+                query = """
+                SELECT food_data FROM foods
+                WHERE name ILIKE %s AND source = %s
+                """
+                params = (f"%{food_name}%", source)
+                
+                # Execute query
+                source_foods = self.db_client.execute_query(query, params)
+                if source_foods:
+                    food_entries.extend([food['food_data'] for food in source_foods])
+            
+            if not food_entries:
+                logger.warning(f"No foods found matching '{food_name}'")
+                return None
+            
+            # Merge food entries
+            merged_data = self.merge_food_data(food_entries)
+            
+            if not merged_data:
+                logger.warning(f"Failed to merge data for '{food_name}'")
+                return None
+            
+            # Save merged data to database
+            merged_id = merged_data.get("food_id", f"merged_{food_name.lower().replace(' ', '_')}")
+            merged_data["food_id"] = merged_id
+            
+            # Convert dict to FoodData object
+            food_data_obj = FoodData.from_dict(merged_data)
+            
+            # Insert into database
+            insert_query = """
+            INSERT INTO foods (food_id, name, source, category, food_data) 
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (food_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                source = EXCLUDED.source,
+                category = EXCLUDED.category,
+                food_data = EXCLUDED.food_data
+            RETURNING food_id
+            """
+            
+            params = (
+                merged_id,
+                merged_data.get("name", food_name),
+                "merged",
+                merged_data.get("category", "Unknown"),
+                merged_data
+            )
+            
+            result = self.db_client.execute_query(insert_query, params)
+            if result and result[0]["food_id"]:
+                logger.info(f"Successfully merged and saved data for '{food_name}' with ID {merged_id}")
+                return merged_id
+            
+            logger.warning(f"Failed to save merged data for '{food_name}'")
             return None
-        
-        files = glob.glob(os.path.join(directory, "*.json"))
-        
-        best_match = None
-        best_similarity = 0.5  # Threshold for considering a match
-        
-        for file in files:
-            try:
-                with open(file, 'r') as f:
-                    data = json.load(f)
-                
-                entry_name = data.get("name", "").lower()
-                
-                # Calculate name similarity
-                similarity = self._name_similarity(food_name, entry_name)
-                
-                if similarity > best_similarity:
-                    best_match = data
-                    best_similarity = similarity
             
-            except Exception as e:
-                logger.error(f"Error reading {file}: {e}")
-        
-        return best_match
+        except Exception as e:
+            logger.error(f"Error merging foods for '{food_name}': {e}", exc_info=True)
+            return None
     
-    def _name_similarity(self, name1: str, name2: str) -> float:
-        """Calculate similarity between food names."""
-        # Simple case: exact match
-        if name1 == name2:
-            return 1.0
+    def merge_all_foods(self, batch_size: int = 100) -> List[str]:
+        """
+        Merge all foods in the database by similar names.
         
-        # Simple Jaccard similarity on words
-        words1 = set(name1.lower().split())
-        words2 = set(name2.lower().split())
-        
-        intersection = len(words1.intersection(words2))
-        union = len(words1.union(words2))
-        
-        if union == 0:
-            return 0.0
-        
-        return intersection / union
+        Args:
+            batch_size: Number of foods to process in each batch
+            
+        Returns:
+            List of IDs of merged foods
+        """
+        try:
+            # Get all distinct food names from database
+            query = """
+            SELECT DISTINCT name FROM foods
+            WHERE source IN ('usda', 'openfoodfacts', 'literature', 'ai_generated')
+            """
+            
+            results = self.db_client.execute_query(query)
+            if not results:
+                logger.warning("No foods found in database")
+                return []
+            
+            food_names = [result["name"] for result in results]
+            logger.info(f"Found {len(food_names)} distinct food names to merge")
+            
+            # Process in batches
+            merged_ids = []
+            
+            for i in range(0, len(food_names), batch_size):
+                batch = food_names[i:i+batch_size]
+                logger.info(f"Processing batch {i//batch_size + 1}/{(len(food_names)-1)//batch_size + 1} ({len(batch)} foods)")
+                
+                for food_name in batch:
+                    merged_id = self.merge_foods_by_name(food_name)
+                    if merged_id:
+                        merged_ids.append(merged_id)
+            
+            logger.info(f"Successfully merged {len(merged_ids)} foods")
+            return merged_ids
+            
+        except Exception as e:
+            logger.error(f"Error merging all foods: {e}", exc_info=True)
+            return []
+
 
 def main():
     """Main function to execute merging."""
-    import argparse
-    
     parser = argparse.ArgumentParser(description="Merge food data from different sources")
-    parser.add_argument("--usda-dir", default="data/processed/usda", help="Directory with USDA food data")
-    parser.add_argument("--openfoodfacts-dir", default="data/raw/openfoodfacts", help="Directory with OpenFoodFacts data")
-    parser.add_argument("--literature-dir", help="Directory with literature-derived data")
-    parser.add_argument("--ai-dir", help="Directory with AI-generated data")
-    parser.add_argument("--output-dir", default="data/enriched/merged", help="Directory to save merged data")
+    parser.add_argument("--food-name", help="Name of food to merge (if not specified, all foods will be merged)")
+    parser.add_argument("--batch-size", type=int, default=100, help="Batch size for processing")
     
     args = parser.parse_args()
     
-    prioritizer = SourcePrioritizer()
-    
     try:
-        merged_files = prioritizer.merge_directory(
-            usda_dir=args.usda_dir,
-            openfoodfacts_dir=args.openfoodfacts_dir,
-            literature_dir=args.literature_dir,
-            ai_dir=args.ai_dir,
-            output_dir=args.output_dir
-        )
+        # Initialize database client
+        db_client = PostgresClient()
         
-        logger.info(f"Successfully merged {len(merged_files)} food entries")
+        # Initialize source prioritizer
+        prioritizer = SourcePrioritizer(db_client)
         
+        if args.food_name:
+            # Merge specific food
+            merged_id = prioritizer.merge_foods_by_name(args.food_name)
+            if merged_id:
+                logger.info(f"Successfully merged food '{args.food_name}' with ID {merged_id}")
+            else:
+                logger.error(f"Failed to merge food '{args.food_name}'")
+                sys.exit(1)
+        else:
+            # Merge all foods
+            merged_ids = prioritizer.merge_all_foods(batch_size=args.batch_size)
+            logger.info(f"Successfully merged {len(merged_ids)} foods")
+    
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Error: {e}", exc_info=True)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
