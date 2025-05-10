@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any, Union
 from utils.api_utils import make_request
 from utils.logging_utils import setup_logging
 from utils.db_utils import PostgresClient
-from utils.nutrient_converter import NutrientConverter
+from utils.nutrient_utils import NutrientUtils
 from constants.food_data_constants import (
     OFF_STANDARD_NUTRIENTS_MAPPING,
     OFF_BRAIN_NUTRIENTS_MAPPING,
@@ -168,10 +168,10 @@ class FoodDataTransformer:
                 
                 # Unit conversions if needed
                 if off_name in NUTRIENTS_G_TO_MG:
-                    value = NutrientConverter.g_to_mg(value)
+                    value = NutrientUtils.g_to_mg(value)
                 
                 elif off_name in NUTRIENTS_G_TO_MCG:
-                    value = NutrientConverter.g_to_mcg(value)
+                    value = NutrientUtils.g_to_mcg(value)
                 
                 standard_nutrients[schema_name] = value
         
@@ -188,16 +188,16 @@ class FoodDataTransformer:
                 
                 # Unit conversions
                 if off_name in ["tryptophan_100g", "tyrosine_100g", "choline_100g"]:
-                    value = NutrientConverter.g_to_mg(value)
+                    value = NutrientUtils.g_to_mg(value)
                 
                 elif off_name in ["folates_100g", "vitamin-b12_100g", "vitamin-d_100g"]:
-                    value = NutrientConverter.g_to_mcg(value)
+                    value = NutrientUtils.g_to_mcg(value)
                 
                 elif off_name in ["magnesium_100g", "zinc_100g", "iron_100g"]:
-                    value = NutrientConverter.g_to_mg(value)
+                    value = NutrientUtils.g_to_mg(value)
                 
                 elif off_name == "selenium_100g":
-                    value = NutrientConverter.g_to_mcg(value)
+                    value = NutrientUtils.g_to_mcg(value)
                 
                 brain_nutrients[schema_name] = value
         
@@ -210,7 +210,7 @@ class FoodDataTransformer:
                 
                 # Unit conversion for DHA, EPA, ALA
                 if off_name in ["dha_100g", "epa_100g", "ala_100g"]:
-                    value = NutrientConverter.g_to_mg(value)
+                    value = NutrientUtils.g_to_mg(value)
                 
                 omega3[schema_name] = value
         
