@@ -4,25 +4,16 @@ This script interfaces with the OpenFoodFacts API to retrieve food data.
 """
 
 # Standard imports
-import time
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List
 
 # Project utilities
+from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.db_utils import PostgresClient
-from utils.nutrient_utils import extract_nutrient_by_mapping, calculate_nutrient_completeness
-from utils.data_utils import generate_food_id, create_food_metadata
 from utils.api_utils import make_api_request
 from utils.logging_utils import setup_logging
 
 # Constants
-from constants.food_data_constants import (
-    OFF_STANDARD_NUTRIENTS_MAPPING,
-    OFF_BRAIN_NUTRIENTS_MAPPING,
-    OFF_OMEGA3_MAPPING,
-    FOOD_CATEGORY_MAPPING,
-    COMPLETENESS_REQUIRED_FIELDS,
-    OFF_DEFAULT_FIELDS
-)
+from constants.food_data_constants import OFF_DEFAULT_FIELDS
 
 # Initialize logger
 logger = setup_logging(__name__)
@@ -95,139 +86,6 @@ class OpenFoodFactsAPI:
             rate_limit_delay=1.0
         )
 
-def validate_response(data: Dict) -> bool:
-    """
-    Validate processed data.
-    
-    Args:
-        data: Processed data
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    # Basic validation
-    if not data or not isinstance(data, dict):
-        return False
-    
-    required_fields = ["food_id", "name", "category", "standard_nutrients"]
-    return all(field in data for field in required_fields)
-
-def transform_to_schema(off_product: Dict) -> Dict:
-    """
-    Transform OpenFoodFacts product data to our schema format.
-    
-    Args:
-        off_product: OpenFoodFacts product data
-        
-    Returns:
-        Dictionary in our schema format
-    """
-    # Extract product data
-    product = off_product.get("product", {})
-    
-    if not product:
-        logger.warning("Empty product data")
-        return {}
-    
-    # Get nutriment data
-    nutriments = product.get("nutriments", {})
-    
-    # Extract category using mapping
-    category = _map_category(product.get("categories_tags", []))
-    
-    # Create standard nutrients
-    standard_nutrients = extract_nutrient_by_mapping(
-        nutriments, 
-        OFF_STANDARD_NUTRIENTS_MAPPING
-    )
-    
-    # Create brain nutrients
-    brain_nutrients = _extract_brain_nutrients(nutriments)
-    
-    # Generate food ID and metadata
-    food_id = generate_food_id("off", product.get('code', ''))
-    source_url = f"https://world.openfoodfacts.org/product/{product.get('code', '')}"
-    
-    metadata = create_food_metadata(
-        source="off",
-        original_id=product.get('code', ''),
-        source_url=source_url,
-        additional_tags=product.get("categories_tags", [])
-    )
-    
-    if "image_url" in product:
-        metadata["image_url"] = product.get("image_url", "")
-    
-    # Calculate completeness
-    data = {
-        "standard_nutrients": standard_nutrients,
-        "brain_nutrients": brain_nutrients
-    }
-    completeness = calculate_nutrient_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
-    
-    # Build the transformed data
-    transformed = {
-        "food_id": food_id,
-        "name": product.get("product_name", ""),
-        "description": product.get("generic_name", product.get("product_name", "")),
-        "category": category,
-        "serving_info": {
-            "serving_size": 100.0,
-            "serving_unit": "g",
-            "household_serving": product.get("serving_size", "")
-        },
-        "standard_nutrients": standard_nutrients,
-        "brain_nutrients": brain_nutrients,
-        "bioactive_compounds": {},
-        "mental_health_impacts": [],
-        "data_quality": {
-            "completeness": completeness,
-            "overall_confidence": 7,
-            "brain_nutrients_source": "openfoodfacts"
-        },
-        "metadata": metadata
-    }
-    
-    return transformed
-
-def _map_category(categories_tags: List[str]) -> str:
-    """Map OpenFoodFacts category tags to our simplified categories."""
-    # Clean up category tags
-    clean_tags = [tag.replace("en:", "").lower() for tag in categories_tags]
-    
-    # Find the first matching category
-    for tag in clean_tags:
-        for key, value in FOOD_CATEGORY_MAPPING.items():
-            if key in tag:
-                return value
-    
-    # Default to the first category or "Miscellaneous"
-    if clean_tags:
-        return clean_tags[0].capitalize()
-    return "Miscellaneous"
-
-def _extract_brain_nutrients(nutriments: Dict) -> Dict:
-    """Extract brain-specific nutrients from OpenFoodFacts nutriments data."""
-    brain_nutrients = {}
-    omega3 = {}
-    
-    # Extract standard brain nutrients
-    for off_name, schema_name in OFF_BRAIN_NUTRIENTS_MAPPING.items():
-        if off_name in nutriments and nutriments[off_name] is not None:
-            brain_nutrients[schema_name] = nutriments[off_name]
-    
-    # Extract omega-3 data
-    for off_name, schema_name in OFF_OMEGA3_MAPPING.items():
-        if off_name in nutriments and nutriments[off_name] is not None:
-            omega3[schema_name] = nutriments[off_name]
-    
-    # Add omega-3 data if available
-    if omega3:
-        omega3["confidence"] = 7
-        brain_nutrients["omega3"] = omega3
-    
-    return brain_nutrients
-
 def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, query: str, limit: int = 10) -> List[str]:
     """
     Search for products and import them to the database.
@@ -246,6 +104,7 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
         
     imported_foods = []
     logger.info(f"Searching for '{query}'")
+    food_transformer = FoodDataTransformer()
     
     # Search for products
     results = api_client.search_products(query)
@@ -259,14 +118,13 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
     for product in results.get("products", [])[:limit]:
         try:
             product_data = {"product": product}
-            transformed = transform_to_schema(product_data)
+            transformed = food_transformer.transform_off_data(product_data)
             
-            if transformed and validate_response(transformed):
-                # Import to DB
-                food_id = db_client.import_food_from_json(transformed)
-                imported_foods.append(food_id)
-                logger.info(f"Imported {transformed['name']} to database")
-                count += 1
+            # Import to DB
+            food_id = db_client.import_food_from_json(transformed)
+            imported_foods.append(food_id)
+            logger.info(f"Imported {transformed['name']} to database")
+            count += 1
         except Exception as e:
             logger.error(f"Error processing product {product.get('code')}: {e}")
     
