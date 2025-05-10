@@ -1,38 +1,37 @@
 """
 OpenFoodFacts API Integration with Python-native Schema
 This script interfaces with the OpenFoodFacts API to retrieve food data.
-
-Features:
-- Uses Python dataclasses for the schema definition 
-- Clean separation of API client, data transformer, and repository
-- Uses project utility modules for HTTP requests, logging, and configuration
 """
 
+# Standard imports
 import time
 from typing import Dict, List, Optional, Any, Union
 
-# Import utility modules
-from schema.schema_validator import SchemaValidator
-from scripts.data_processing.food_data_transformer import FoodDataTransformer
-from utils.api_utils import make_request
-from utils.logging_utils import setup_logging
+# Project utilities
 from utils.db_utils import PostgresClient
-from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT, BIOACTIVE_COMPOUNDS_TO_PREDICT
+from utils.nutrient_utils import extract_nutrient_by_mapping, calculate_nutrient_completeness
+from utils.data_utils import generate_food_id, create_food_metadata
+from utils.api_utils import make_api_request
+from utils.logging_utils import setup_logging
+
+# Constants
+from constants.food_data_constants import (
+    OFF_STANDARD_NUTRIENTS_MAPPING,
+    OFF_BRAIN_NUTRIENTS_MAPPING,
+    OFF_OMEGA3_MAPPING,
+    FOOD_CATEGORY_MAPPING,
+    COMPLETENESS_REQUIRED_FIELDS,
+    OFF_DEFAULT_FIELDS
+)
 
 # Initialize logger
 logger = setup_logging(__name__)
 
-class OpenFoodFactsClient:
-    """Client for the OpenFoodFacts API, handles only API interactions."""
+class OpenFoodFactsAPI:
+    """Client for the OpenFoodFacts API."""
     
     def __init__(self, user_agent: str = None, base_url: str = None):
-        """
-        Initialize the API client with user agent information.
-        
-        Args:
-            user_agent: Identification string for API requests
-            base_url: Base URL for API requests
-        """
+        """Initialize the API client with user agent information."""
         self.user_agent = user_agent or "NutritionalPsychiatryDataset/1.0"
         self.base_url = base_url or "https://world.openfoodfacts.org/api/v2"
         self.headers = {"User-Agent": self.user_agent}
@@ -46,28 +45,11 @@ class OpenFoodFactsClient:
                         fields: str = None) -> Dict:
         """
         Search for products in the OpenFoodFacts database.
-        
-        Args:
-            query: General search term
-            brands: Filter by brand(s)
-            categories: Filter by categories
-            page: Page number for pagination
-            page_size: Number of results per page
-            fields: Comma-separated fields to include
-            
-        Returns:
-            Dictionary containing search results
         """
         endpoint = f"{self.base_url}/search"
         
         if fields is None:
-            # Default fields to fetch - focus on nutrition data
-            fields = (
-                "code,product_name,brands,categories_tags,image_url,"
-                "nutriments,nutrient_levels,nutrition_score_fr,"
-                "ingredients_analysis_tags,ingredients_text_with_allergens,"
-                "serving_size,nutrient_levels"
-            )
+            fields = OFF_DEFAULT_FIELDS
         
         params = {
             "search_terms": query,
@@ -82,33 +64,18 @@ class OpenFoodFactsClient:
         # Remove None values
         params = {k: v for k, v in params.items() if v is not None}
         
-        try:
-            response = make_request(
-                url=endpoint,
-                params=params,
-                headers=self.headers,
-                retry_count=3,
-                timeout=30
-            )
-            
-            # Rate limiting
-            time.sleep(1)  # Be nice to the OFF API
-            
-            return response
-        except Exception as e:
-            logger.error(f"Error searching products: {e}")
-            raise
+        return make_api_request(
+            url=endpoint,
+            params=params,
+            headers=self.headers,
+            retry_count=3,
+            timeout=30,
+            rate_limit_delay=1.0
+        )
     
     def get_product(self, barcode: str, fields: str = None) -> Dict:
         """
         Get detailed information about a specific product by barcode.
-        
-        Args:
-            barcode: Product barcode
-            fields: Comma-separated fields to include
-        
-        Returns:
-            Dictionary containing product information
         """
         if not barcode:
             raise ValueError("Barcode is required")
@@ -119,138 +86,191 @@ class OpenFoodFactsClient:
         if fields:
             params["fields"] = fields
         
-        try:
-            response = make_request(
-                url=endpoint,
-                params=params,
-                headers=self.headers,
-                retry_count=3,
-                timeout=30
-            )
-            
-            # Rate limiting
-            time.sleep(1)
-            
-            return response
-        except Exception as e:
-            logger.error(f"Error getting product {barcode}: {e}")
-            raise
+        return make_api_request(
+            url=endpoint,
+            params=params,
+            headers=self.headers,
+            retry_count=3,
+            timeout=30,
+            rate_limit_delay=1.0
+        )
 
-class OpenFoodFactsAPI:
+def validate_response(data: Dict) -> bool:
     """
-    Main class for OpenFoodFacts API integration.
-    Coordinates the client, transformer and data storage.
+    Validate processed data.
+    
+    Args:
+        data: Processed data
+        
+    Returns:
+        True if valid, False otherwise
     """
+    # Basic validation
+    if not data or not isinstance(data, dict):
+        return False
     
-    def __init__(self, db_client: PostgresClient = None):
-        """
-        Initialize the OpenFoodFacts API integration.
-        
-        Args:
-            db_client: Database client for storing results
-        """
-        super().__init__(db_client=db_client)
-        self.client = OpenFoodFactsClient()
-        self.transformer = FoodDataTransformer()
-        self.validator = SchemaValidator()
+    required_fields = ["food_id", "name", "category", "standard_nutrients"]
+    return all(field in data for field in required_fields)
+
+def transform_to_schema(off_product: Dict) -> Dict:
+    """
+    Transform OpenFoodFacts product data to our schema format.
     
-    def search(self, query: str) -> Dict:
-        """
-        Search for products based on query.
+    Args:
+        off_product: OpenFoodFacts product data
         
-        Args:
-            query: Search term
-            
-        Returns:
-            Dictionary with search results
-        """
-        return self.client.search_products(query=query)
+    Returns:
+        Dictionary in our schema format
+    """
+    # Extract product data
+    product = off_product.get("product", {})
     
-    def get_details(self, barcode: str) -> Dict:
-        """
-        Get detailed product information.
-        
-        Args:
-            barcode: Product barcode
-            
-        Returns:
-            Dictionary with product details
-        """
-        return self.client.get_product(barcode)
+    if not product:
+        logger.warning("Empty product data")
+        return {}
     
-    def process_response(self, response: Dict) -> Dict:
-        """
-        Process response data.
-        
-        Args:
-            response: API response data
-            
-        Returns:
-            Processed data in schema format
-        """
-        return self.transformer.transform_to_schema(response)
+    # Get nutriment data
+    nutriments = product.get("nutriments", {})
     
-    def validate_response(self, data: Dict) -> bool:
-        """
-        Validate processed data.
-        
-        Args:
-            data: Processed data
-            
-        Returns:
-            True if valid, False otherwise
-        """
-        errors = self.validator.validate_food_data(data)
-        if errors:
-            logger.warning(f"Validation errors: {errors}")
-            return False
-        return True
+    # Extract category using mapping
+    category = _map_category(product.get("categories_tags", []))
     
-    def search_and_import(self, query: str, limit: int = 10) -> List[str]:
-        """
-        Search for products and import them to the database.
+    # Create standard nutrients
+    standard_nutrients = extract_nutrient_by_mapping(
+        nutriments, 
+        OFF_STANDARD_NUTRIENTS_MAPPING
+    )
+    
+    # Create brain nutrients
+    brain_nutrients = _extract_brain_nutrients(nutriments)
+    
+    # Generate food ID and metadata
+    food_id = generate_food_id("off", product.get('code', ''))
+    source_url = f"https://world.openfoodfacts.org/product/{product.get('code', '')}"
+    
+    metadata = create_food_metadata(
+        source="off",
+        original_id=product.get('code', ''),
+        source_url=source_url,
+        additional_tags=product.get("categories_tags", [])
+    )
+    
+    if "image_url" in product:
+        metadata["image_url"] = product.get("image_url", "")
+    
+    # Calculate completeness
+    data = {
+        "standard_nutrients": standard_nutrients,
+        "brain_nutrients": brain_nutrients
+    }
+    completeness = calculate_nutrient_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
+    
+    # Build the transformed data
+    transformed = {
+        "food_id": food_id,
+        "name": product.get("product_name", ""),
+        "description": product.get("generic_name", product.get("product_name", "")),
+        "category": category,
+        "serving_info": {
+            "serving_size": 100.0,
+            "serving_unit": "g",
+            "household_serving": product.get("serving_size", "")
+        },
+        "standard_nutrients": standard_nutrients,
+        "brain_nutrients": brain_nutrients,
+        "bioactive_compounds": {},
+        "mental_health_impacts": [],
+        "data_quality": {
+            "completeness": completeness,
+            "overall_confidence": 7,
+            "brain_nutrients_source": "openfoodfacts"
+        },
+        "metadata": metadata
+    }
+    
+    return transformed
+
+def _map_category(categories_tags: List[str]) -> str:
+    """Map OpenFoodFacts category tags to our simplified categories."""
+    # Clean up category tags
+    clean_tags = [tag.replace("en:", "").lower() for tag in categories_tags]
+    
+    # Find the first matching category
+    for tag in clean_tags:
+        for key, value in FOOD_CATEGORY_MAPPING.items():
+            if key in tag:
+                return value
+    
+    # Default to the first category or "Miscellaneous"
+    if clean_tags:
+        return clean_tags[0].capitalize()
+    return "Miscellaneous"
+
+def _extract_brain_nutrients(nutriments: Dict) -> Dict:
+    """Extract brain-specific nutrients from OpenFoodFacts nutriments data."""
+    brain_nutrients = {}
+    omega3 = {}
+    
+    # Extract standard brain nutrients
+    for off_name, schema_name in OFF_BRAIN_NUTRIENTS_MAPPING.items():
+        if off_name in nutriments and nutriments[off_name] is not None:
+            brain_nutrients[schema_name] = nutriments[off_name]
+    
+    # Extract omega-3 data
+    for off_name, schema_name in OFF_OMEGA3_MAPPING.items():
+        if off_name in nutriments and nutriments[off_name] is not None:
+            omega3[schema_name] = nutriments[off_name]
+    
+    # Add omega-3 data if available
+    if omega3:
+        omega3["confidence"] = 7
+        brain_nutrients["omega3"] = omega3
+    
+    return brain_nutrients
+
+def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, query: str, limit: int = 10) -> List[str]:
+    """
+    Search for products and import them to the database.
+    
+    Args:
+        api_client: Initialized API client
+        db_client: Database client
+        query: Search term
+        limit: Maximum number of products to save
         
-        Args:
-            query: Search term
-            limit: Maximum number of products to save
-            
-        Returns:
-            List of imported food IDs
-        """
-        if not self.db_client:
-            raise ValueError("Database client is required for import")
-            
-        imported_foods = []
+    Returns:
+        List of imported food IDs
+    """
+    if not db_client:
+        raise ValueError("Database client is required for import")
+        
+    imported_foods = []
+    logger.info(f"Searching for '{query}'")
+    
+    # Search for products
+    results = api_client.search_products(query)
+    
+    if not results.get("products"):
+        logger.warning(f"No results found for {query}")
+        return imported_foods
+    
+    # Process each product up to the limit
+    count = 0
+    for product in results.get("products", [])[:limit]:
         try:
-            # Search for products based on query
-            results = self.search(query)
+            product_data = {"product": product}
+            transformed = transform_to_schema(product_data)
             
-            count = 0
-            
-            for product in results.get("products", []):
-                if count >= limit:
-                    break
-                
-                # Get full product details
-                try:
-                    product_data = {"product": product}  # Wrap in same format as API response
-                    transformed = self.process_response(product_data)
-                    
-                    if transformed and self.validate_response(transformed):
-                        # Import to DB
-                        food_id = self.db_client.import_food_from_json(transformed)
-                        imported_foods.append(food_id)
-                        logger.info(f"Imported {transformed['name']} to database")
-                        
-                        count += 1
-                except Exception as e:
-                    logger.error(f"Error processing product {product.get('code')}: {e}")
-                    
-            return imported_foods
-            
+            if transformed and validate_response(transformed):
+                # Import to DB
+                food_id = db_client.import_food_from_json(transformed)
+                imported_foods.append(food_id)
+                logger.info(f"Imported {transformed['name']} to database")
+                count += 1
         except Exception as e:
-            logger.error(f"Error searching for {query}: {e}")
-            raise
+            logger.error(f"Error processing product {product.get('code')}: {e}")
+    
+    return imported_foods
 
 def main():
     """Main function to execute the script."""
@@ -267,10 +287,12 @@ def main():
         db_client = PostgresClient()
         
         # Create API client
-        api = OpenFoodFactsAPI(db_client=db_client)
+        api_client = OpenFoodFactsAPI()
         
         # Search and import
-        imported_foods = api.search_and_import(
+        imported_foods = search_and_import(
+            api_client=api_client,
+            db_client=db_client,
             query=args.query, 
             limit=args.limit
         )
@@ -279,7 +301,6 @@ def main():
         
     except Exception as e:
         logger.error(f"Error: {e}")
-
 
 if __name__ == "__main__":
     main()

@@ -14,26 +14,13 @@ from constants.food_data_constants import (
     OFF_OMEGA3_MAPPING,
     FOOD_CATEGORY_MAPPING,
     NUTRIENTS_G_TO_MG,
-    NUTRIENTS_G_TO_MCG,
-    ANTI_INFLAMMATORY_NUTRIENTS,
-    PRO_INFLAMMATORY_NUTRIENTS,
-    DEFAULT_CONFIDENCE_RATINGS
+    NUTRIENTS_G_TO_MCG
 )
 
 # Initialize logger
 logger = setup_logging(__name__)
 
-class FoodDataTransformer:
-    """Transforms OpenFoodFacts data to the nutritional psychiatry schema."""
-    
-    def __init__(self, nutrient_mappings: Dict = None):
-        """Initialize the transformer with nutrient mappings."""
-        # If custom mappings provided, use them, otherwise use constants
-        self.standard_nutrients_mapping = nutrient_mappings.get("standard_nutrients") if nutrient_mappings else OFF_STANDARD_NUTRIENTS_MAPPING
-        self.brain_nutrients_mapping = nutrient_mappings.get("brain_nutrients") if nutrient_mappings else OFF_BRAIN_NUTRIENTS_MAPPING
-        self.omega3_mapping = nutrient_mappings.get("omega3") if nutrient_mappings else OFF_OMEGA3_MAPPING
-        self.category_mapping = nutrient_mappings.get("category_mapping") if nutrient_mappings else FOOD_CATEGORY_MAPPING
-    
+class FoodDataTransformer:    
     def transform_to_schema(self, off_product: Dict) -> Dict:
         """
         Transform OpenFoodFacts product data to our schema format.
@@ -42,7 +29,7 @@ class FoodDataTransformer:
             off_product: OpenFoodFacts product data
             
         Returns:
-            Dictionary in our schema format (compatible with FoodData)
+            Dictionary in our schema format
         """
         # Extract product data
         product = off_product.get("product", {})
@@ -54,11 +41,14 @@ class FoodDataTransformer:
         # Get nutriment data
         nutriments = product.get("nutriments", {})
         
-        # Extract category
+        # Extract category using FOOD_CATEGORY_MAPPING
         category = self._map_category(product.get("categories_tags", []))
         
-        # Create standard nutrients
-        standard_nutrients_data = self._extract_standard_nutrients(nutriments)
+        # Create standard nutrients using utility
+        standard_nutrients_data = extract_nutrient_by_mapping(
+            nutriments, 
+            OFF_STANDARD_NUTRIENTS_MAPPING
+        )
         
         # Create brain nutrients
         brain_nutrients_data = self._extract_brain_nutrients(nutriments)
@@ -66,44 +56,41 @@ class FoodDataTransformer:
         # Create serving info
         serving_info_data = self._extract_serving_info(product)
         
-        # Calculate completeness
-        completeness = self._calculate_completeness(nutriments)
+        # Generate food ID using utility
+        food_id = generate_food_id("off", product.get('code', ''))
         
-        # Create metadata
-        metadata_data = {
-            "version": "0.1.0",
-            "created": datetime.now().isoformat(),
-            "last_updated": datetime.now().isoformat(),
-            "source_urls": [
-                f"https://world.openfoodfacts.org/product/{product.get('code', '')}"
-            ],
-            "source_ids": {
-                "openfoodfacts_id": product.get('code', '')
-            },
-            "image_url": product.get("image_url", ""),
-            "tags": product.get("categories_tags", [])
+        # Create metadata using utility
+        metadata_data = create_food_metadata(
+            source="off",
+            original_id=product.get('code', ''),
+            source_url=f"https://world.openfoodfacts.org/product/{product.get('code', '')}",
+            additional_tags=product.get("categories_tags", [])
+        )
+        
+        # Add image URL if available
+        if "image_url" in product:
+            metadata_data["image_url"] = product.get("image_url", "")
+        
+        # Calculate completeness with utility
+        data = {
+            "standard_nutrients": standard_nutrients_data,
+            "brain_nutrients": brain_nutrients_data
         }
+        completeness = calculate_nutrient_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
         
         # Create data quality
         data_quality_data = {
             "completeness": completeness,
-            "overall_confidence": 7,
+            "overall_confidence": DEFAULT_CONFIDENCE_RATINGS["openfoodfacts"],
             "brain_nutrients_source": "openfoodfacts"
         }
         
         # Create inflammatory index if possible
         inflammatory_index_data = self._calculate_inflammatory_index(product, nutriments)
         
-        # Extract allergen info if available
-        if "allergens_tags" in product:
-            allergens = [allergen.replace("en:", "") for allergen in product.get("allergens_tags", [])]
-            if allergens:
-                # Add to metadata tags
-                metadata_data["tags"].extend(allergens)
-        
         # Build the full food data dictionary
         transformed_data = {
-            "food_id": f"off_{product.get('code', '')}",
+            "food_id": food_id,
             "name": product.get("product_name", ""),
             "description": product.get("generic_name", product.get("product_name", "")),
             "category": category,
@@ -129,7 +116,7 @@ class FoodDataTransformer:
         
         # Find the first matching category
         for tag in clean_tags:
-            for key, value in self.nutrient_mappings["category_mapping"].items():
+            for key, value in FOOD_CATEGORY_MAPPING.items():
                 if key in tag:
                     return value
         

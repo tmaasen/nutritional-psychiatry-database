@@ -22,6 +22,7 @@ from typing import List, Dict, Optional, Callable, Any
 from config import get_config, Config
 
 # Import utility modules
+from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils import (
     setup_logging,
     load_dotenv,
@@ -34,7 +35,6 @@ from utils.db_utils import PostgresClient
 from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
 from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
 from scripts.data_collection.literature_extract import LiteratureExtractor
-from scripts.data_processing.transform import USDADataTransformer
 from scripts.data_processing.enrichment import AIEnrichmentEngine
 from scripts.data_processing.validation import DataValidator
 from scripts.ai.confidence_calibration_system import ConfidenceCalibrationSystem
@@ -148,7 +148,7 @@ class DatasetOrchestrator:
         )
         
         # Initialize processors
-        self.transformer = USDADataTransformer(
+        self.transformer = FoodDataTransformer(
             db_client=self.db_client
         )
         self.enricher = AIEnrichmentEngine(
