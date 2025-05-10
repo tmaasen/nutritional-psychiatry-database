@@ -28,11 +28,7 @@ from utils import (
     get_env,
     get_config
 )
-from data.postgres_client import PostgresClient
-
-# Import base classes
-from scripts.data_collection.base_api_client import BaseAPIClient
-from scripts.data_processing.base_processor import BaseProcessor
+from utils.db_utils import PostgresClient
 
 # Import processing modules
 from scripts.data_collection.usda_api import USDAFoodDataCentralAPI

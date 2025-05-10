@@ -17,7 +17,7 @@ import argparse
 import time
 import requests
 from typing import Dict, List, Any, Optional, Tuple
-from data.postgres_client import PostgresClient
+from utils.db_utils import PostgresClient
 import logging
 from config import get_config
 from datetime import datetime

@@ -210,8 +210,6 @@ class PostgresClient:
             logger.error(f"Error getting food {food_id}: {e}")
             raise
     
-    # Additional food-specific methods...
-    
     # Data import/export methods for migration and backup only
     
     def import_food_from_json(self, food_json: Union[Dict, str]) -> str:

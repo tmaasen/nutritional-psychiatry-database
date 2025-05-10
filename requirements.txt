@@ -22,3 +22,5 @@ seaborn>=0.11.0
 
 # For testing (optional)
 pytest>=7.0.0
+
+psycopg2

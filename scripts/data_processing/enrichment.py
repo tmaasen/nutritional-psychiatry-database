@@ -18,7 +18,7 @@ import sys
 # Add the project root directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from scripts.ai.openai_client import OpenAIClient
-from data.postgres_client import PostgresClient
+from utils.db_utils import PostgresClient
 
 # Check if OpenAI is installed
 if importlib.util.find_spec("openai") is None:

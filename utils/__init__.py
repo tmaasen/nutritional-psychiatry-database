@@ -74,7 +74,6 @@ def get_db_config() -> Dict[str, Any]:
         "max_connections": int(get_env("DB_MAX_CONNECTIONS", "10"))
     }
 
-
 def get_api_config() -> Dict[str, Any]:
     """
     Get API configuration from environment variables.

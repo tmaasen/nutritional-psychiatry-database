@@ -16,8 +16,7 @@ from schema.schema_validator import SchemaValidator
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.api_utils import make_request
 from utils.logging_utils import setup_logging
-from scripts.data_collection.base_api_client import BaseAPIClient
-from data.postgres_client import PostgresClient
+from utils.db_utils import PostgresClient
 from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT, BIOACTIVE_COMPOUNDS_TO_PREDICT
 
 # Initialize logger
@@ -137,7 +136,7 @@ class OpenFoodFactsClient:
             logger.error(f"Error getting product {barcode}: {e}")
             raise
 
-class OpenFoodFactsAPI(BaseAPIClient):
+class OpenFoodFactsAPI:
     """
     Main class for OpenFoodFacts API integration.
     Coordinates the client, transformer and data storage.

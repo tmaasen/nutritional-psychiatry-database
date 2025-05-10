@@ -8,7 +8,7 @@ import os
 import json
 import glob
 import logging
-from data.postgres_client import PostgresClient
+from utils.db_utils import PostgresClient
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
