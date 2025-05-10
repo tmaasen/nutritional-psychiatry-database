@@ -13,21 +13,16 @@ This script orchestrates the end-to-end process of building the Nutritional Psyc
 Run this script to process foods through the entire pipeline or specific steps.
 """
 
-import os
-import json
 import time
-import logging
 import sys
 from typing import List, Dict, Optional, Callable, Any
-from config import get_config, Config
+from config import get_config
 
 # Import utility modules
+from schema.schema_validator import SchemaValidator
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils import (
     setup_logging,
-    load_dotenv,
-    get_env,
-    get_config
 )
 from utils.db_utils import PostgresClient
 
@@ -36,7 +31,6 @@ from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
 from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
 from scripts.data_collection.literature_extract import LiteratureExtractor
 from scripts.data_processing.enrichment import AIEnrichmentEngine
-from scripts.data_processing.validation import DataValidator
 from scripts.ai.confidence_calibration_system import ConfidenceCalibrationSystem
 from scripts.data_processing.food_source_prioritization import SourcePrioritizer
 
@@ -155,9 +149,7 @@ class DatasetOrchestrator:
             api_key=self.api_keys.get("OPENAI_API_KEY"),
             db_client=self.db_client
         )
-        self.validator = DataValidator(
-            db_client=self.db_client
-        )
+        self.validator = SchemaValidator()
         self.calibrator = ConfidenceCalibrationSystem(
             evaluation_dir=self.config.dirs["evaluation"],
             dataset_dir=self.config.dirs["ai_generated"],
