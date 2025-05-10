@@ -48,6 +48,66 @@ OFF_OMEGA3_MAPPING = {
     "ala_100g": "ala_mg"
 }
 
+# USDA Constants
+
+# USDA nutrient ID mappings to our schema fields
+USDA_STANDARD_NUTRIENTS_MAPPING = {
+    "Energy": "calories",
+    "Protein": "protein_g",
+    "Carbohydrate, by difference": "carbohydrates_g",
+    "Total lipid (fat)": "fat_g",
+    "Fiber, total dietary": "fiber_g",
+    "Sugars, total including NLEA": "sugars_g",
+    "Calcium, Ca": "calcium_mg",
+    "Iron, Fe": "iron_mg",
+    "Magnesium, Mg": "magnesium_mg",
+    "Phosphorus, P": "phosphorus_mg",
+    "Potassium, K": "potassium_mg",
+    "Sodium, Na": "sodium_mg",
+    "Zinc, Zn": "zinc_mg",
+    "Copper, Cu": "copper_mg",
+    "Manganese, Mn": "manganese_mg",
+    "Selenium, Se": "selenium_mcg",
+    "Vitamin C, total ascorbic acid": "vitamin_c_mg",
+    "Vitamin A, IU": "vitamin_a_iu"
+}
+
+# USDA brain-specific nutrient mappings
+USDA_BRAIN_NUTRIENTS_MAPPING = {
+    "Tryptophan": "tryptophan_mg",
+    "Tyrosine": "tyrosine_mg",
+    "Vitamin B-6": "vitamin_b6_mg",
+    "Folate, total": "folate_mcg",
+    "Vitamin B-12": "vitamin_b12_mcg",
+    "Vitamin D (D2 + D3)": "vitamin_d_mcg",
+    "Magnesium, Mg": "magnesium_mg",
+    "Zinc, Zn": "zinc_mg",
+    "Iron, Fe": "iron_mg",
+    "Selenium, Se": "selenium_mcg",
+    "Choline, total": "choline_mg"
+}
+
+# USDA unit conversion requirements
+USDA_UNIT_CONVERSIONS = {
+    "ug_to_mg": ["Folate, total", "Vitamin B-12", "Vitamin D (D2 + D3)"],
+    "g_to_mcg": ["Selenium, Se"]
+}
+
+# Add this to the required fields constants for completeness calculation
+COMPLETENESS_REQUIRED_FIELDS = {
+    "standard_nutrients": [
+        "calories", "protein_g", "carbohydrates_g", 
+        "fat_g", "fiber_g", "sugars_g"
+    ],
+    "brain_nutrients": [
+        "vitamin_b6_mg", "folate_mcg", "vitamin_b12_mcg",
+        "vitamin_d_mcg", "magnesium_mg", "zinc_mg",
+        "iron_mg", "selenium_mcg"
+    ]
+}
+
+# Generic constants
+
 FOOD_CATEGORY_MAPPING = {
     "fruits": "Fruits",
     "vegetables": "Vegetables",
