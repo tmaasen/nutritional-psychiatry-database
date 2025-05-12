@@ -10,30 +10,19 @@ import argparse
 from datetime import datetime
 
 # Import schema models
-from schema.food_data import (
-    FoodData, BrainNutrients, Omega3, BioactiveCompounds,
-    MentalHealthImpact, ResearchSupport
-)
+from schema.food_data import FoodData
 
 # Import utilities
 from utils.db_utils import PostgresClient
 from utils.nutrient_utils import (
-    NutrientUtils,
     parse_nutrient_predictions,
     parse_bioactive_predictions,
     parse_mental_health_impacts
 )
-from utils.json_utils import JSONParser
 from utils.logging_utils import setup_logging
 
 # Import project configuration
 from config import get_config
-
-# Import constants
-from constants.food_data_constants import (
-    BRAIN_NUTRIENTS_TO_PREDICT,
-    BIOACTIVE_COMPOUNDS_TO_PREDICT
-)
 
 # Initialize logger
 logger = setup_logging(__name__)

@@ -7,48 +7,73 @@ This script applies confidence calibration to the entire dataset:
 - Ensures consistency across similar foods
 - Applies food-category specific adjustments
 - Produces a calibrated version of the dataset
+
+This version uses the database directly instead of file I/O and leverages
+the established data models for better type safety and validation.
 """
 
 import os
 import json
 import glob
-import logging
 import argparse
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Import project utilities
+from utils.logging_utils import setup_logging
+from utils.db_utils import PostgresClient
+from config import get_config
+
+# Import data models
+from schema.food_data import (
+    FoodData, BrainNutrients, Omega3, BioactiveCompounds,
+    MentalHealthImpact, SourcePriority, DataQuality
 )
-logger = logging.getLogger(__name__)
+
+# Initialize logger
+logger = setup_logging(__name__)
 
 class ConfidenceCalibrationSystem:
-    """System for calibrating confidence ratings in the dataset."""
+    """System for calibrating confidence ratings in the nutritional psychiatry dataset."""
     
     def __init__(
         self,
-        evaluation_dir: str = "data/evaluation",
-        dataset_dir: str = "data/enriched/ai_generated",
-        output_dir: str = "data/enriched/calibrated"
+        db_client: Optional[PostgresClient] = None,
+        evaluation_dir: Optional[str] = None,
+        batch_size: int = 100,
+        dry_run: bool = False
     ):
         """
         Initialize the calibration system.
         
         Args:
+            db_client: PostgreSQL database client
             evaluation_dir: Directory with evaluation results
-            dataset_dir: Directory with dataset to calibrate
-            output_dir: Directory to save calibrated dataset
+            batch_size: Number of foods to process in each batch
+            dry_run: If True, don't save changes to database
         """
-        self.evaluation_dir = evaluation_dir
-        self.dataset_dir = dataset_dir
-        self.output_dir = output_dir
+        # Use provided database client or create a new one
+        self.db_client = db_client or PostgresClient()
         
-        os.makedirs(output_dir, exist_ok=True)
+        # Get configuration
+        config = get_config()
+        
+        # Set up directories based on config
+        self.evaluation_dir = evaluation_dir or config.get_directory("evaluation")
+        if not self.evaluation_dir:
+            self.evaluation_dir = os.path.join(config.data_dir, "evaluation")
+        
+        # Processing settings
+        self.batch_size = batch_size
+        self.dry_run = dry_run
         
         # Load evaluation metrics to guide calibration
         self.calibration_model = self._load_calibration_model()
+        
+        logger.info(f"Initialized Confidence Calibration System")
+        logger.info(f"Using evaluation data from: {self.evaluation_dir}")
+        if dry_run:
+            logger.info("DRY RUN MODE: No changes will be saved to database")
     
     def _load_calibration_model(self) -> Dict:
         """
@@ -66,16 +91,16 @@ class ConfidenceCalibrationSystem:
         }
         
         # Find most recent evaluation summary
-        summary_files = glob.glob(os.path.join(self.evaluation_dir, "evaluation_summary_*.json"))
-        if not summary_files:
-            logger.warning("No evaluation summary files found. Using default calibration model.")
-            return model
-        
-        # Sort by modification time (most recent first)
-        summary_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-        summary_file = summary_files[0]
-        
         try:
+            summary_files = glob.glob(os.path.join(self.evaluation_dir, "evaluation_summary_*.json"))
+            if not summary_files:
+                logger.warning("No evaluation summary files found. Using default calibration model.")
+                return model
+            
+            # Sort by modification time (most recent first)
+            summary_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            summary_file = summary_files[0]
+            
             with open(summary_file, 'r') as f:
                 summary = json.load(f)
             
@@ -116,13 +141,12 @@ class ConfidenceCalibrationSystem:
                 if mape > 50:
                     model["global"]["overall_confidence_adjustment"] -= 1.0
             
-            # Load food-category specific calibration
-            # (This would require more evaluation data by category)
-            
             logger.info(f"Calibration model built with {len(model['global']['nutrient_adjustments'])} nutrient-specific adjustments")
+            logger.info(f"Global confidence adjustment: {model['global']['overall_confidence_adjustment']}")
             
         except Exception as e:
-            logger.error(f"Error loading evaluation summary: {e}")
+            logger.error(f"Error loading evaluation summary: {e}", exc_info=True)
+            # Continue with default model
         
         return model
     
@@ -136,29 +160,92 @@ class ConfidenceCalibrationSystem:
         Returns:
             Food data with calibrated confidence ratings
         """
-        # Make a copy of the data
-        calibrated = food_data.copy()
-        food_category = food_data.get("category", "")
-        
-        # Apply nutrient-specific calibrations
-        if "brain_nutrients" in calibrated:
-            brain_nutrients = calibrated["brain_nutrients"]
+        try:
+            # Convert to FoodData object for type safety
+            food = FoodData.from_dict(food_data)
+            food_category = food.category
             
-            for nutrient, value in brain_nutrients.items():
-                # Skip non-numeric and non-confidence fields
-                if not isinstance(value, (int, float)) or nutrient.startswith("confidence_"):
-                    continue
+            # Apply calibrations to brain nutrients
+            if food.brain_nutrients:
+                self._calibrate_brain_nutrients(food)
                 
-                # Get current confidence rating
-                confidence_key = f"confidence_{nutrient}"
-                if confidence_key in brain_nutrients:
-                    current_confidence = brain_nutrients[confidence_key]
-                    
+            # Apply calibrations to bioactive compounds
+            if food.bioactive_compounds:
+                self._calibrate_bioactive_compounds(food)
+                
+            # Apply calibrations to mental health impacts
+            if food.mental_health_impacts:
+                self._calibrate_mental_health_impacts(food)
+            
+            # Add calibration metadata
+            if not food.metadata:
+                # This should rarely happen since metadata is required,
+                # but handle it gracefully just in case
+                from datetime import datetime
+                food.metadata = {
+                    "version": "0.1.0",
+                    "created": datetime.now().isoformat(),
+                    "last_updated": datetime.now().isoformat(),
+                    "source_urls": [],
+                    "tags": []
+                }
+            
+            # Update calibration metadata
+            food.metadata["last_updated"] = datetime.now().isoformat()
+            if "calibration" not in food.metadata:
+                food.metadata["calibration"] = {}
+                
+            food.metadata["calibration"] = {
+                "timestamp": datetime.now().isoformat(),
+                "method": "global_calibration_model",
+                "version": "1.0.0",
+                "adjustments_applied": {
+                    "global": self.calibration_model["global"]["overall_confidence_adjustment"],
+                    "nutrients_adjusted": list(self.calibration_model["global"]["nutrient_adjustments"].keys())
+                }
+            }
+            
+            # Convert back to dictionary
+            return food.to_dict()
+                
+        except Exception as e:
+            logger.error(f"Error calibrating food {food_data.get('food_id', 'unknown')}: {e}")
+            # Return original data if calibration fails
+            return food_data
+    
+    def _calibrate_brain_nutrients(self, food: FoodData) -> None:
+        """
+        Calibrate confidence ratings for brain nutrients.
+        
+        Args:
+            food: FoodData object to calibrate
+        """
+        if not food.brain_nutrients:
+            return
+        
+        brain_nutrients = food.brain_nutrients
+        
+        # Process regular brain nutrients
+        for nutrient_name in dir(brain_nutrients):
+            # Skip special attributes and non-confidence fields
+            if nutrient_name.startswith('_') or nutrient_name.startswith('confidence_'):
+                continue
+                
+            # Skip methods and non-data attributes
+            if callable(getattr(brain_nutrients, nutrient_name)) or isinstance(getattr(brain_nutrients, nutrient_name), (dict, list)):
+                continue
+            
+            # Get current confidence rating if it exists
+            confidence_key = f"confidence_{nutrient_name}"
+            if hasattr(brain_nutrients, confidence_key):
+                current_confidence = getattr(brain_nutrients, confidence_key)
+                
+                if current_confidence is not None:
                     # Apply nutrient-specific adjustment
-                    adjustment = self.calibration_model["global"]["nutrient_adjustments"].get(nutrient, 0)
+                    adjustment = self.calibration_model["global"]["nutrient_adjustments"].get(nutrient_name, 0)
                     
                     # Apply category-specific adjustment if available
-                    category_adjustment = self.calibration_model["global"]["category_adjustments"].get(food_category, {}).get(nutrient, 0)
+                    category_adjustment = self.calibration_model["global"]["category_adjustments"].get(food.category, {}).get(nutrient_name, 0)
                     
                     # Apply global adjustment
                     global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
@@ -170,126 +257,288 @@ class ConfidenceCalibrationSystem:
                     new_confidence = max(1, min(10, new_confidence))
                     
                     # Update confidence
-                    brain_nutrients[confidence_key] = new_confidence
+                    setattr(brain_nutrients, confidence_key, new_confidence)
         
-        # Apply bioactive compound calibrations
-        if "bioactive_compounds" in calibrated:
-            bioactive_compounds = calibrated["bioactive_compounds"]
-            
-            for compound, value in bioactive_compounds.items():
-                # Skip non-numeric and non-confidence fields
-                if not isinstance(value, (int, float)) or compound.startswith("confidence_"):
-                    continue
+        # Handle omega-3 separately if it exists
+        if brain_nutrients.omega3:
+            omega3 = brain_nutrients.omega3
+            if hasattr(omega3, 'confidence') and omega3.confidence is not None:
+                current_confidence = omega3.confidence
                 
-                # Get current confidence rating
-                confidence_key = f"confidence_{compound}"
-                if confidence_key in bioactive_compounds:
-                    current_confidence = bioactive_compounds[confidence_key]
-                    
-                    # Bioactive compounds tend to have less certainty, apply conservative adjustment
-                    # (We have less evaluation data for these, so be more cautious)
-                    global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
-                    
-                    # For bioactives, we're generally more uncertain, so reduce confidence more
-                    bioactive_adjustment = -1.0
-                    
-                    # Calculate new confidence
+                # Apply global adjustment
+                global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
+                
+                # Apply omega3-specific adjustments
+                omega3_adjustment = self.calibration_model["global"]["nutrient_adjustments"].get("omega3", 0)
+                
+                # Calculate new confidence
+                new_confidence = current_confidence + global_adjustment + omega3_adjustment
+                
+                # Ensure confidence is in valid range (1-10)
+                new_confidence = max(1, min(10, new_confidence))
+                
+                # Update confidence
+                omega3.confidence = new_confidence
+    
+    def _calibrate_bioactive_compounds(self, food: FoodData) -> None:
+        """
+        Calibrate confidence ratings for bioactive compounds.
+        
+        Args:
+            food: FoodData object to calibrate
+        """
+        if not food.bioactive_compounds:
+            return
+        
+        bioactive_compounds = food.bioactive_compounds
+        
+        # Bioactive compounds typically have higher uncertainty
+        bioactive_adjustment = -1.0  # Conservative adjustment for bioactives
+        global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
+        
+        # Process bioactive compounds
+        for compound_name in dir(bioactive_compounds):
+            # Skip special attributes and non-confidence fields
+            if compound_name.startswith('_') or compound_name.startswith('confidence_'):
+                continue
+                
+            # Skip methods and non-data attributes
+            if callable(getattr(bioactive_compounds, compound_name)) or isinstance(getattr(bioactive_compounds, compound_name), (dict, list)):
+                continue
+            
+            # Get current confidence rating if it exists
+            confidence_key = f"confidence_{compound_name}"
+            if hasattr(bioactive_compounds, confidence_key):
+                current_confidence = getattr(bioactive_compounds, confidence_key)
+                
+                if current_confidence is not None:
+                    # Apply adjustments
                     new_confidence = current_confidence + global_adjustment + bioactive_adjustment
                     
                     # Ensure confidence is in valid range (1-10)
                     new_confidence = max(1, min(10, new_confidence))
                     
                     # Update confidence
-                    bioactive_compounds[confidence_key] = new_confidence
-        
-        # Apply mental health impact calibrations
-        if "mental_health_impacts" in calibrated:
-            impacts = calibrated["mental_health_impacts"]
-            
-            for impact in impacts:
-                if "confidence" in impact:
-                    current_confidence = impact["confidence"]
-                    
-                    # Mental health impacts generally need conservative confidence
-                    # Apply global adjustment plus specific reduction
-                    global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
-                    impact_adjustment = -1.0  # Be conservative for mental health claims
-                    
-                    # Calculate new confidence
-                    new_confidence = current_confidence + global_adjustment + impact_adjustment
-                    
-                    # Ensure confidence is in valid range (1-10)
-                    new_confidence = max(1, min(10, new_confidence))
-                    
-                    # Update confidence
-                    impact["confidence"] = new_confidence
-        
-        # Add calibration metadata
-        if "metadata" not in calibrated:
-            calibrated["metadata"] = {}
-        
-        calibrated["metadata"]["confidence_calibration"] = {
-            "timestamp": datetime.now().isoformat(),
-            "method": "global_calibration_model",
-            "version": "0.1.0"
-        }
-        
-        return calibrated
+                    setattr(bioactive_compounds, confidence_key, new_confidence)
     
-    def calibrate_dataset(self):
-        """Calibrate the entire dataset."""
-        # List all files in dataset directory
-        dataset_files = glob.glob(os.path.join(self.dataset_dir, "*.json"))
-        logger.info(f"Found {len(dataset_files)} files to calibrate")
+    def _calibrate_mental_health_impacts(self, food: FoodData) -> None:
+        """
+        Calibrate confidence ratings for mental health impacts.
         
-        calibrated_count = 0
+        Args:
+            food: FoodData object to calibrate
+        """
+        if not food.mental_health_impacts:
+            return
         
-        for file_path in dataset_files:
-            try:
-                # Load food data
-                with open(file_path, 'r') as f:
-                    food_data = json.load(f)
+        # Mental health impacts generally need conservative confidence
+        impact_adjustment = -1.0  # Be conservative for mental health claims
+        global_adjustment = self.calibration_model["global"]["overall_confidence_adjustment"]
+        
+        # Process each impact
+        for impact in food.mental_health_impacts:
+            if hasattr(impact, 'confidence') and impact.confidence is not None:
+                current_confidence = impact.confidence
                 
-                # Calibrate confidence ratings
+                # Apply adjustments
+                new_confidence = current_confidence + global_adjustment + impact_adjustment
+                
+                # Ensure confidence is in valid range (1-10)
+                new_confidence = max(1, min(10, new_confidence))
+                
+                # Update confidence
+                impact.confidence = new_confidence
+    
+    def get_foods_to_calibrate(self, batch_size: int = None, offset: int = 0) -> List[Dict]:
+        """
+        Get foods that need confidence calibration from the database.
+        
+        Args:
+            batch_size: Maximum number of foods to retrieve
+            offset: Offset for pagination
+            
+        Returns:
+            List of food data dictionaries
+        """
+        limit = batch_size or self.batch_size
+        
+        try:
+            query = """
+            SELECT food_id, name, food_data
+            FROM foods
+            WHERE food_data->'data_quality'->>'overall_confidence' IS NOT NULL
+            ORDER BY food_id
+            LIMIT %s OFFSET %s
+            """
+            
+            results = self.db_client.execute_query(query, (limit, offset))
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error fetching foods to calibrate: {e}")
+            return []
+    
+    def save_calibrated_food(self, food_id: str, calibrated_data: Dict) -> bool:
+        """
+        Save calibrated food data to the database.
+        
+        Args:
+            food_id: Food ID
+            calibrated_data: Calibrated food data
+            
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        if self.dry_run:
+            logger.info(f"DRY RUN: Would save calibrated data for {food_id}")
+            return True
+            
+        try:
+            query = """
+            UPDATE foods
+            SET food_data = %s, 
+                last_updated = NOW()
+            WHERE food_id = %s
+            RETURNING food_id
+            """
+            
+            result = self.db_client.execute_query(query, (json.dumps(calibrated_data), food_id))
+            
+            if result and result[0]['food_id'] == food_id:
+                return True
+            else:
+                logger.warning(f"Food {food_id} not found in database")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error saving calibrated food {food_id}: {e}")
+            return False
+    
+    def calibrate_batch(self, batch: List[Dict]) -> Tuple[int, int]:
+        """
+        Calibrate a batch of foods.
+        
+        Args:
+            batch: List of food dictionaries from database
+            
+        Returns:
+            Tuple of (successful_count, failed_count)
+        """
+        success_count = 0
+        failure_count = 0
+        
+        for item in batch:
+            food_id = item['food_id']
+            food_data = item['food_data']
+            
+            try:
+                logger.debug(f"Calibrating {food_id}: {item['name']}")
                 calibrated = self.calibrate_confidence(food_data)
                 
-                # Save calibrated data
-                filename = os.path.basename(file_path)
-                output_path = os.path.join(self.output_dir, filename)
-                
-                with open(output_path, 'w') as f:
-                    json.dump(calibrated, f, indent=2)
-                
-                calibrated_count += 1
-                
+                if self.save_calibrated_food(food_id, calibrated):
+                    success_count += 1
+                    logger.debug(f"Successfully calibrated {food_id}")
+                else:
+                    failure_count += 1
+                    logger.warning(f"Failed to save calibrated food {food_id}")
+                    
             except Exception as e:
-                logger.error(f"Error calibrating {file_path}: {e}")
+                failure_count += 1
+                logger.error(f"Error processing food {food_id}: {e}")
         
-        logger.info(f"Calibrated {calibrated_count} files. Saved to {self.output_dir}")
-
+        return success_count, failure_count
+    
+    def calibrate_dataset(self) -> Dict[str, int]:
+        """
+        Calibrate the entire dataset.
+        
+        Returns:
+            Dictionary with statistics about calibration process
+        """
+        start_time = datetime.now()
+        
+        stats = {
+            "total_processed": 0,
+            "successfully_calibrated": 0,
+            "failed": 0,
+            "batches": 0
+        }
+        
+        offset = 0
+        while True:
+            # Get batch of foods to calibrate
+            batch = self.get_foods_to_calibrate(self.batch_size, offset)
+            
+            if not batch:
+                logger.info(f"No more foods to calibrate")
+                break
+            
+            stats["batches"] += 1
+            stats["total_processed"] += len(batch)
+            
+            # Process batch
+            logger.info(f"Processing batch {stats['batches']} ({len(batch)} foods)")
+            success, failure = self.calibrate_batch(batch)
+            
+            stats["successfully_calibrated"] += success
+            stats["failed"] += failure
+            
+            # Update offset for next batch
+            offset += len(batch)
+            
+            # Log progress
+            logger.info(f"Batch {stats['batches']} completed: {success} succeeded, {failure} failed")
+            
+            # Exit if batch is smaller than batch size (last batch)
+            if len(batch) < self.batch_size:
+                break
+        
+        # Calculate timing
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        stats["duration_seconds"] = duration
+        stats["foods_per_second"] = stats["total_processed"] / duration if duration > 0 else 0
+        
+        logger.info(f"Calibration complete: {stats['successfully_calibrated']} succeeded, {stats['failed']} failed")
+        logger.info(f"Total time: {duration:.2f} seconds ({stats['foods_per_second']:.2f} foods/sec)")
+        
+        return stats
 
 def main():
     """Main function to execute calibration."""
     parser = argparse.ArgumentParser(description="Calibrate confidence ratings in dataset")
-    parser.add_argument("--evaluation-dir", default="data/evaluation", help="Directory with evaluation results")
-    parser.add_argument("--dataset-dir", default="data/enriched/ai_generated", help="Directory with dataset to calibrate")
-    parser.add_argument("--output-dir", default="data/enriched/calibrated", help="Directory to save calibrated dataset")
+    parser.add_argument("--evaluation-dir", help="Directory with evaluation results")
+    parser.add_argument("--batch-size", type=int, default=100, help="Batch size for processing")
+    parser.add_argument("--dry-run", action="store_true", help="Run without saving changes")
     
     args = parser.parse_args()
     
     try:
+        # Initialize database client
+        db_client = PostgresClient()
+        
+        # Initialize calibrator
         calibrator = ConfidenceCalibrationSystem(
+            db_client=db_client,
             evaluation_dir=args.evaluation_dir,
-            dataset_dir=args.dataset_dir,
-            output_dir=args.output_dir
+            batch_size=args.batch_size,
+            dry_run=args.dry_run
         )
         
-        calibrator.calibrate_dataset()
+        # Run calibration
+        stats = calibrator.calibrate_dataset()
+        
+        # Print summary
+        print("\nCalibration Summary:")
+        print(f"Total foods processed: {stats['total_processed']}")
+        print(f"Successfully calibrated: {stats['successfully_calibrated']}")
+        print(f"Failed: {stats['failed']}")
+        print(f"Processing time: {stats['duration_seconds']:.2f} seconds")
+        print(f"Processing rate: {stats['foods_per_second']:.2f} foods/second")
         
     except Exception as e:
-        logger.error(f"Error during calibration: {e}")
-        raise
-
+        logger.error(f"Error during calibration: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
