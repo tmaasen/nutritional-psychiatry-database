@@ -20,7 +20,7 @@ import numpy as np
 from datetime import datetime
 
 # Import our OpenAI client
-from openai_client import OpenAIClient
+from scripts.ai.openai_api import OpenAIClient
 
 # Configure logging
 logging.basicConfig(

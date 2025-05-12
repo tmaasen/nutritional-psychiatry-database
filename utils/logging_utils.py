@@ -9,9 +9,8 @@ in a format suitable for container environments.
 import logging
 import sys
 import json
-import os
 import time
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, List
 from functools import wraps
 
 def setup_logging(name=None, level=logging.INFO):
@@ -30,7 +29,6 @@ def setup_logging(name=None, level=logging.INFO):
     logger.addHandler(handler)
     
     return logger
-
 
 def log_execution_time(logger: Optional[logging.Logger] = None):
     """
@@ -53,3 +51,50 @@ def log_execution_time(logger: Optional[logging.Logger] = None):
         return wrapper
     
     return decorator
+
+
+def log_api_request(logger, api: str, task_type: str, model: str, messages: List[Dict], params: Dict):
+    """
+    Log API request details.
+    
+    Args:
+        logger: Logger instance
+        api: API name (e.g., "openai")
+        task_type: Type of task
+        model: Model name
+        messages: Request messages
+        params: Additional parameters
+    """
+    logger.debug(
+        f"API Request: {api}, Task: {task_type}, Model: {model}, "
+        f"Params: {json.dumps(params)}"
+    )
+
+def log_api_response(logger, api: str, task_type: str, response: Any):
+    """
+    Log API response details.
+    
+    Args:
+        logger: Logger instance
+        api: API name
+        task_type: Type of task
+        response: API response
+    """
+    # Log minimal response info to avoid cluttering logs
+    logger.debug(f"API Response: {api}, Task: {task_type}, Success: True")
+
+def log_api_error(logger, api: str, task_type: str, error: Exception, context: Dict):
+    """
+    Log API error details.
+    
+    Args:
+        logger: Logger instance
+        api: API name
+        task_type: Type of task
+        error: Exception that occurred
+        context: Error context
+    """
+    logger.error(
+        f"API Error: {api}, Task: {task_type}, Error: {type(error).__name__}, "
+        f"Message: {str(error)}, Context: {json.dumps(context)}"
+    )
