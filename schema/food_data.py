@@ -2,12 +2,12 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-from food_data_enums import (
+from constants.food_data_enums import (
     ImpactType, Direction, TimeToEffect, BrainNutrientSource, 
     ImpactsSource, SourcePriorityType, InteractionType, 
     EffectType, PatternName, PatternContribution, CalculationMethod
 )
-from food_data_constants import (
+from constants.food_data_constants import (
     BRAIN_NUTRIENTS_TO_PREDICT, BIOACTIVE_COMPOUNDS_TO_PREDICT,
     DEFAULT_CONFIDENCE_RATINGS, FOOD_CATEGORY_MAPPING
 )
@@ -583,4 +583,67 @@ class FoodData:
             neural_targets=neural_targets,
             data_quality=data_quality,
             metadata=metadata
+        )
+
+@dataclass
+class EvaluationMetrics:
+    """Model for evaluation metrics records."""
+    test_run_id: str
+    timestamp: str
+    metrics_type: str
+    metrics_data: Dict[str, Any]
+    id: Optional[int] = None
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "test_run_id": self.test_run_id,
+            "timestamp": self.timestamp,
+            "metrics_type": self.metrics_type,
+            "metrics_data": self.metrics_data
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'EvaluationMetrics':
+        """Create instance from dictionary."""
+        return cls(
+            id=data.get("id"),
+            test_run_id=data.get("test_run_id", ""),
+            timestamp=data.get("timestamp", datetime.now().isoformat()),
+            metrics_type=data.get("metrics_type", ""),
+            metrics_data=data.get("metrics_data", {})
+        )
+
+@dataclass
+class FoodEvaluation:
+    """Model for food evaluation records."""
+    food_id: str
+    test_run_id: str
+    timestamp: str
+    evaluation_type: str
+    evaluation_data: Dict[str, Any]
+    id: Optional[int] = None
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "food_id": self.food_id,
+            "test_run_id": self.test_run_id,
+            "timestamp": self.timestamp,
+            "evaluation_type": self.evaluation_type,
+            "evaluation_data": self.evaluation_data
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'FoodEvaluation':
+        """Create instance from dictionary."""
+        return cls(
+            id=data.get("id"),
+            food_id=data.get("food_id", ""),
+            test_run_id=data.get("test_run_id", ""),
+            timestamp=data.get("timestamp", datetime.now().isoformat()),
+            evaluation_type=data.get("evaluation_type", ""),
+            evaluation_data=data.get("evaluation_data", {})
         )
