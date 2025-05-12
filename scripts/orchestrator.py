@@ -30,7 +30,7 @@ from utils.db_utils import PostgresClient
 from scripts.data_collection.usda_api import USDAFoodDataCentralAPI
 from scripts.data_collection.openfoodfacts_api import OpenFoodFactsAPI
 from scripts.data_collection.literature_extract import LiteratureExtractor
-from scripts.data_processing.enrichment import AIEnrichmentEngine
+from scripts.data_processing.ai_enrichment import AIEnrichmentEngine
 from scripts.ai.confidence_calibration_system import ConfidenceCalibrationSystem
 from scripts.data_processing.food_source_prioritization import SourcePrioritizer
 

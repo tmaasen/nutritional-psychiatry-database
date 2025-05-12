@@ -95,6 +95,108 @@ class NutrientUtils:
             
         return round(filled_fields / total_fields, 2)
 
+    @staticmethod
+    def parse_nutrient_predictions(response: Any) -> Dict[str, float]:
+        """
+        Parse nutrient predictions from AI response.
+        
+        Args:
+            response: AI response (string or parsed dict)
+            
+        Returns:
+            Dictionary of nutrient predictions
+        """
+        try:
+            # If response is a string, parse it
+            if isinstance(response, str):
+                # Extract JSON from the response using JSONParser
+                predictions = JSONParser.parse_json(response, {})
+            else:
+                predictions = response
+            
+            # Filter to just the numeric values and ignore confidence ratings
+            numeric_predictions = {}
+            for key, value in predictions.items():
+                if isinstance(value, (int, float)) and not key.startswith("confidence_") and key != "reasoning":
+                    numeric_predictions[key] = value
+            
+            return numeric_predictions
+            
+        except Exception as e:
+            logger.error(f"Error parsing nutrient predictions: {e}")
+            return {}
+
+    @staticmethod
+    def parse_bioactive_predictions(response: Any) -> Dict[str, float]:
+        """
+        Parse bioactive compound predictions from AI response.
+        
+        Args:
+            response: AI response (string or parsed dict)
+            
+        Returns:
+            Dictionary of bioactive compound predictions
+        """
+        try:
+            # If response is a string, parse it
+            if isinstance(response, str):
+                # Extract JSON from the response
+                predictions = JSONParser.parse_json(response, {})
+            else:
+                predictions = response
+            
+            # Filter to keep just the numeric fields and remove confidence fields
+            return {k: v for k, v in predictions.items() 
+                    if isinstance(v, (int, float)) and not k.startswith("confidence_") 
+                    and k != "reasoning"}
+                    
+        except Exception as e:
+            logger.error(f"Error parsing bioactive predictions: {e}")
+            return {}
+
+    @staticmethod
+    def parse_mental_health_impacts(response: Any) -> List[Dict]:
+        """
+        Parse mental health impact predictions from AI response.
+        
+        Args:
+            response: AI response (string or parsed list/dict)
+            
+        Returns:
+            List of mental health impact dictionaries
+        """
+        try:
+            # If response is a string, parse it
+            if isinstance(response, str):
+                # Extract JSON from the response
+                impacts = JSONParser.parse_json(response, [])
+            else:
+                impacts = response
+            
+            # Handle case where the result isn't a list
+            if not isinstance(impacts, list):
+                if isinstance(impacts, dict) and "impacts" in impacts:
+                    impacts = impacts["impacts"]
+                else:
+                    impacts = [impacts]  # Treat as single impact
+            
+            # Validate each impact
+            valid_impacts = []
+            required_fields = ["impact_type", "direction", "mechanism", "strength", "confidence"]
+            
+            for impact in impacts:
+                if isinstance(impact, dict) and all(field in impact for field in required_fields):
+                    valid_impacts.append(impact)
+                else:
+                    missing = [field for field in required_fields if field not in impact]
+                    logger.warning(f"Impact missing required fields: {missing}")
+            
+            return valid_impacts
+            
+        except Exception as e:
+            logger.error(f"Error parsing mental health impacts: {e}")
+            return []
+
 class NutrientNameNormalizer:
     """Normalizes nutrient names to match our schema."""
     
