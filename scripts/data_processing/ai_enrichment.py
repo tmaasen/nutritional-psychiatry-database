@@ -53,8 +53,8 @@ class AIEnrichmentEngine:
             raise ValueError("OpenAI API key is required.")
         
         # Import here to avoid circular imports
-        from scripts.ai.openai_api import OpenAIClient
-        self.openai_client = OpenAIClient(api_key=self.api_key)
+        from scripts.ai.openai_api import OpenAIAPI
+        self.openai_client = OpenAIAPI(api_key=self.api_key)
         
         logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
     

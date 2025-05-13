@@ -23,4 +23,6 @@ seaborn>=0.11.0
 # For testing (optional)
 pytest>=7.0.0
 
-psycopg2
+psycopg2-binary # Postgres client
+
+tqdm>=4.62.0 # Progress bar
