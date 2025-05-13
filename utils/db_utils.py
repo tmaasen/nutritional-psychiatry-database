@@ -314,3 +314,44 @@ class PostgresClient:
         except Exception as e:
             logger.error(f"Error restoring from file {file_path}: {e}")
             raise
+    
+    def get_foods_for_processing(
+        self, 
+        stage: str, 
+        force_reprocess: bool = False,
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Dict]:
+        """
+        Get foods that need processing for a specific stage.
+        
+        Args:
+            stage: Processing stage (processed, validated, etc.)
+            force_reprocess: Whether to include already processed foods
+            limit: Maximum number of foods to retrieve
+            offset: Offset for pagination
+            
+        Returns:
+            List of food data dictionaries
+        """
+        stages = {
+            "transform": "processed",
+            "validate": "validated",
+            "enrich": "enriched",
+            "calibrate": "calibrated"
+        }
+        
+        if stage not in stages:
+            raise ValueError(f"Invalid stage: {stage}")
+        
+        column = stages[stage]
+        
+        query = f"""
+        SELECT food_id, name, food_data 
+        FROM foods 
+        WHERE {column} = FALSE OR %s
+        ORDER BY food_id
+        LIMIT %s OFFSET %s
+        """
+        
+        return self.execute_query(query, (force_reprocess, limit, offset))

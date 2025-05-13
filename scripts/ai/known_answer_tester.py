@@ -720,8 +720,7 @@ class KnownAnswerTester:
             
             if matching_ref:
                 impact_eval["correctly_identified"] = True
-                impact_eval["expected_confidence"] = matching_ref.get("confidence_threshold", 
-                                                                     DEFAULT_CONFIDENCE_RATINGS.get("literature", 7))
+                impact_eval["expected_confidence"] = matching_ref.get("confidence_threshold", DEFAULT_CONFIDENCE_RATINGS.get("literature", 7))
                 
                 # Calculate confidence error
                 confidence_error = abs(impact_eval["predicted_confidence"] - impact_eval["expected_confidence"])

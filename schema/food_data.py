@@ -312,7 +312,10 @@ class FoodData:
     population_variations: List[PopulationVariation] = field(default_factory=list)
     dietary_patterns: List[DietaryPattern] = field(default_factory=list)
     inflammatory_index: Optional[InflammatoryIndex] = None
-    neural_targets: List[NeuralTarget] = field(default_factory=list)
+    neural_targets: List[NeuralTarget] = field(default_factory=list)    
+    processed: bool = False
+    validated: bool = False
+    validation_errors: Optional[List[str]] = field(default_factory=list)
     
     def to_dict(self) -> Dict:
         """Convert dataclass to dictionary."""
@@ -565,6 +568,10 @@ class FoodData:
         for target in data.get('neural_targets', []):
             neural_targets.append(NeuralTarget(**target))
         
+        processed = data.get('processed', False)
+        validated = data.get('validated', False)
+        validation_errors = data.get('validation_errors', [])
+
         return cls(
             food_id=data.get('food_id', ''),
             name=data.get('name', ''),
@@ -582,7 +589,10 @@ class FoodData:
             inflammatory_index=inflammatory_index,
             neural_targets=neural_targets,
             data_quality=data_quality,
-            metadata=metadata
+            metadata=metadata,
+            processed=processed,
+            validated=validated,
+            validation_errors=validation_errors
         )
 
 @dataclass
