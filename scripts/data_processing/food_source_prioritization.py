@@ -574,14 +574,11 @@ class SourcePrioritizer:
         if "metadata" in merged:
             metadata = merged["metadata"].copy()
         else:
-            metadata = {
-                "version": "0.1.0",
-                "created": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
-                "source_urls": [],
-                "source_ids": {},
-                "tags": []
-            }
+            metadata = Metadata(
+                version='0.1.0',
+                created=datetime.now().isoformat(),
+                last_updated=datetime.now().isoformat(),
+            )
         
         # Update last_updated
         metadata["last_updated"] = datetime.now().isoformat()

@@ -26,7 +26,7 @@ from config import get_config
 
 # Import data models
 from schema.food_data import (
-    FoodData, BrainNutrients, Omega3, BioactiveCompounds,
+    FoodData, BrainNutrients, Metadata, Omega3, BioactiveCompounds,
     MentalHealthImpact, SourcePriority, DataQuality
 )
 
@@ -182,13 +182,11 @@ class ConfidenceCalibrationSystem:
                 # This should rarely happen since metadata is required,
                 # but handle it gracefully just in case
                 from datetime import datetime
-                food.metadata = {
-                    "version": "0.1.0",
-                    "created": datetime.now().isoformat(),
-                    "last_updated": datetime.now().isoformat(),
-                    "source_urls": [],
-                    "tags": []
-                }
+                food.metadata = Metadata(
+                    version='0.1.0',
+                    created=datetime.now().isoformat(),
+                    last_updated=datetime.now().isoformat(),
+                )
             
             # Update calibration metadata
             food.metadata["last_updated"] = datetime.now().isoformat()
