@@ -1,8 +1,4 @@
 # utils/prompt_template_utils.py
-"""
-Utilities for template loading and substitution in the Nutritional Psychiatry Dataset.
-"""
-
 import re
 import os
 import json
@@ -18,16 +14,6 @@ class TemplateManager:
     
     @staticmethod
     def load_template(template_id: str, template_dir: Optional[str] = None) -> Dict:
-        """
-        Load a prompt template by ID.
-        
-        Args:
-            template_id: Template identifier
-            template_dir: Directory containing templates
-            
-        Returns:
-            Template dictionary
-        """
         if not template_dir:
             from constants.ai_constants import TEMPLATE_DIR
             template_dir = TEMPLATE_DIR
@@ -48,15 +34,6 @@ class TemplateManager:
 
     @staticmethod
     def sanitize_variables(variables: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Sanitize template variables to prevent prompt injection.
-        
-        Args:
-            variables: Dictionary of variables
-            
-        Returns:
-            Sanitized variables dictionary
-        """
         sanitized = {}
         for key, value in variables.items():
             if isinstance(value, str):
@@ -71,16 +48,6 @@ class TemplateManager:
 
     @staticmethod
     def substitute_template_variables(template_str: str, variables: Dict[str, Any]) -> str:
-        """
-        Substitute variables in a template string.
-        
-        Args:
-            template_str: Template string with variables in {{var}} format
-            variables: Dictionary of variable values
-            
-        Returns:
-            String with variables substituted
-        """
         # First sanitize the variables
         variables = TemplateManager.sanitize_variables(variables)
         

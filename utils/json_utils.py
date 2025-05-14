@@ -16,15 +16,6 @@ class JSONParser:
     
     @staticmethod
     def extract_json(text: str) -> Optional[str]:
-        """
-        Extract JSON string from text that might contain other content.
-        
-        Args:
-            text: Text potentially containing JSON
-            
-        Returns:
-            Extracted JSON string or None if not found
-        """
         # Try to find JSON between curly braces
         json_match = re.search(r'(\{.*\})', text, re.DOTALL)
         if json_match:
@@ -39,16 +30,6 @@ class JSONParser:
     
     @staticmethod
     def parse_json(text: str, default: Any = None) -> Dict:
-        """
-        Safely parse JSON from text with fallback.
-        
-        Args:
-            text: Text containing JSON
-            default: Default value if parsing fails
-            
-        Returns:
-            Parsed JSON or default value
-        """
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -65,14 +46,4 @@ class JSONParser:
     
     @staticmethod
     def validate_json_schema(data: Dict, required_fields: list) -> bool:
-        """
-        Validate that JSON contains required fields.
-        
-        Args:
-            data: JSON data to validate
-            required_fields: List of required field names
-            
-        Returns:
-            True if valid, False otherwise
-        """
         return all(field in data for field in required_fields)

@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Research utilities for extracting and classifying nutritional psychiatry data.
-"""
-
 import re
 import nltk
 from nltk.tokenize import sent_tokenize

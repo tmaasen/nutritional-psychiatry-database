@@ -168,7 +168,7 @@ class WebPageExtractor:
         """
         try:
             headers = {
-                "User-Agent": "NutritionalPsychiatryDataset/1.0",
+                "User-Agent": "NutritionalPsychiatryDatabase/1.0",
                 "Accept": "text/html,application/xhtml+xml,application/xml"
             }
             response = requests.get(url, headers=headers, timeout=30)

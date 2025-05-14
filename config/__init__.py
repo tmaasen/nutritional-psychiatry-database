@@ -5,42 +5,22 @@ This module handles loading of environment variables, configuration files, and
 provides a unified interface for accessing configuration values throughout the application.
 """
 
-import os
-import json
 import logging
-from typing import Dict, Any, Optional, Union, List
-
-# Import utility functions
-from utils import load_dotenv, load_json, get_env, get_project_dirs
+import os
+from typing import Dict, Any, Optional
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file
-load_dotenv()
-
 class Config:
     """Centralized configuration management."""
     
-    def __init__(self, config_file: Optional[str] = None):
-        """
-        Initialize configuration from environment variables and config file.
-        
-        Args:
-            config_file: Optional path to JSON configuration file
-        """
-        # Load config file if provided
-        self.config_data = {}
-        if config_file:
-            try:
-                self.config_data = load_json(config_file)
-                logger.info(f"Loaded configuration from {config_file}")
-            except Exception as e:
-                logger.error(f"Error loading configuration from {config_file}: {e}")
+    def __init__(self):
+        load_dotenv()
         
         # Initialize directory structure
         self.data_dir = get_env("DATA_DIR", "data")
-        self.dirs = get_project_dirs(self.data_dir)
+        # self.dirs = get_project_dirs(self.data_dir)
         
         # API keys with fallbacks
         self.api_keys = {
@@ -77,10 +57,6 @@ class Config:
         self.continue_on_failure = self._parse_bool(
             get_env("CONTINUE_ON_FAILURE", str(self.config_data.get("continue_on_failure", False)))
         )
-    
-    def _parse_bool(self, value: str) -> bool:
-        """Convert string to boolean."""
-        return value.lower() in ("yes", "true", "t", "1")
     
     def get_api_key(self, service: str) -> Optional[str]:
         """
@@ -144,7 +120,7 @@ class Config:
             Full path to the directory
         """
         return self.dirs.get(name, "")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
@@ -162,15 +138,29 @@ class Config:
 default_config = Config()
 
 def get_config(config_file: Optional[str] = None) -> Config:
-    """
-    Get a configuration instance.
-    
-    Args:
-        config_file: Optional path to configuration file
-    
-    Returns:
-        Configuration instance
-    """
     if config_file:
         return Config(config_file)
     return default_config
+
+def load_dotenv(env_file: str = ".env") -> None:
+    """
+    Load environment variables from .env file.
+    """
+    if not os.path.exists(env_file):
+        logger.warning(f"Environment file {env_file} not found")
+        return
+    
+    with open(env_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+            
+            # Parse key-value pairs
+            if '=' in line:
+                key, value = line.split('=', 1)
+                os.environ[key.strip()] = value.strip().strip('"\'')
+
+def get_env(key: str, default: Any = None) -> Any:
+    return os.environ.get(key, default)

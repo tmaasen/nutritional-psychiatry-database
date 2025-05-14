@@ -1,9 +1,9 @@
-
 import json
 import os
 from typing import Dict, List, Any, Optional
 from schema.food_data import StandardNutrients
 from utils.logging_utils import setup_logging
+
 logger = setup_logging(__name__)
 class NutrientUtils:
     """Utility class for nutrient conversion operations."""
@@ -48,39 +48,6 @@ class NutrientUtils:
                     extracted.nutrients[target_field] = value
         
         return extracted
-
-    @staticmethod
-    def calculate_nutrient_completeness(
-        data: Dict[str, Any], 
-        required_fields: Dict[str, List[str]]
-    ) -> float:
-        """
-        Calculate completeness score for nutritional data.
-        
-        Args:
-            data: Food data dictionary
-            required_fields: Dictionary mapping sections to lists of required fields
-                Example: {"standard_nutrients": ["calories", "protein_g"], ...}
-                
-        Returns:
-            Completeness score between 0 and 1
-        """
-        total_fields = 0
-        filled_fields = 0
-        
-        for section, fields in required_fields.items():
-            if section in data:
-                section_data = data[section]
-                total_fields += len(fields)
-                
-                for field in fields:
-                    if field in section_data and section_data[field] is not None:
-                        filled_fields += 1
-        
-        if total_fields == 0:
-            return 0.0
-            
-        return round(filled_fields / total_fields, 2)
 
     @staticmethod
     def parse_nutrient_predictions(response: Any) -> Dict[str, float]:

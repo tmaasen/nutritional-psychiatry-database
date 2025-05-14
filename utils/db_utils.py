@@ -13,6 +13,8 @@ from contextlib import contextmanager
 from psycopg2.extras import RealDictCursor, execute_values
 from psycopg2 import pool
 
+from config import get_env
+
 from schema.food_data import FoodData
 
 logger = logging.getLogger(__name__)
@@ -62,7 +64,6 @@ class PostgresClient:
     
     def _build_connection_string_from_env(self) -> str:
         """Build connection string from environment variables."""
-        from utils import get_env
         
         db_host = get_env("DB_HOST")
         db_port = get_env("DB_PORT", "5432")
@@ -209,7 +210,6 @@ class PostgresClient:
         except Exception as e:
             logger.error(f"Error getting food {food_id}: {e}")
             raise
-    
 
     # Data import/export methods for migration and backup only
     

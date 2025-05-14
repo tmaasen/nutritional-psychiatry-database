@@ -1,77 +1,8 @@
 
-from typing import Dict, Any
+from typing import Dict
 from utils.logging_utils import setup_logging
 
 logger = setup_logging(__name__)
-
-def merge_nutrient_data(
-    primary_data: Dict[str, Any], 
-    secondary_data: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Merge nutrient data from two sources, prioritizing primary data.
-    
-    Args:
-        primary_data: Primary nutrient data
-        secondary_data: Secondary nutrient data
-        
-    Returns:
-        Merged nutrient data
-    """
-    if not secondary_data:
-        return primary_data.copy() if primary_data else {}
-        
-    if not primary_data:
-        return secondary_data.copy()
-    
-    # Start with primary data
-    merged = primary_data.copy()
-    
-    # Add fields from secondary data that don't exist in primary
-    for key, value in secondary_data.items():
-        if key not in merged or merged[key] is None:
-            merged[key] = value
-    
-    return merged
-
-def find_similar_food(food_name: str, foods: List[Dict]) -> Optional[Dict]:
-    """
-    Find a food with similar name using fuzzy matching.
-    
-    Args:
-        food_name: Food name to match
-        foods: List of food dictionaries
-        
-    Returns:
-        Matching food or None if no match found
-    """
-    food_name_lower = food_name.lower()
-    
-    # First try for exact match
-    for food in foods:
-        if food.get("name", "").lower() == food_name_lower:
-            return food
-    
-    # Try for partial match
-    best_match = None
-    best_similarity = 0.5  # Threshold
-    
-    for food in foods:
-        food_name = food.get("name", "").lower()
-        # Simple Jaccard similarity on words
-        words1 = set(food_name_lower.split())
-        words2 = set(food_name.split())
-        
-        intersection = len(words1.intersection(words2))
-        union = len(words1.union(words2))
-        
-        if union > 0:
-            similarity = intersection / union
-            if similarity > best_similarity:
-                best_match = food
-                best_similarity = similarity
-    
-    return best_match
 
 def calculate_completeness(merged_data: Dict) -> float:
     """

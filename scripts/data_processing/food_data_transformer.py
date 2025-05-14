@@ -1,13 +1,13 @@
 # food_data_transformer.py
 import copy
-import re
 from datetime import datetime
+import re
 from typing import Dict, List, Optional, Union
 
 # Import utility modules
-from schema.food_data import BrainNutrients, DataQuality, FoodData, InflammatoryIndex, ServingInfo, StandardNutrients
+from schema.food_data import BrainNutrients, DataQuality, FoodData, InflammatoryIndex, Metadata, ServingInfo, StandardNutrients
 from utils.logging_utils import setup_logging
-from utils.data_utils import generate_food_id, create_food_metadata
+from utils.data_utils import generate_food_id
 from constants.food_data_constants import (
     # OpenFoodFacts mappings
     OFF_STANDARD_NUTRIENTS_MAPPING,
@@ -26,6 +26,7 @@ from constants.food_data_constants import (
     DEFAULT_CONFIDENCE_RATINGS,
     COMPLETENESS_REQUIRED_FIELDS
 )
+from utils.merge_utils import calculate_completeness
 from utils.nutrient_utils import NutrientUtils
 
 # Initialize logger
@@ -101,11 +102,14 @@ class FoodDataTransformer:
         
         # Create metadata
         source_url = f"https://fdc.nal.usda.gov/fdc-app.html#/food-details/{food.get('fdcId', '')}/nutrients"
-        metadata = create_food_metadata(
-            source="usda",
-            original_id=str(food.get('fdcId', '')),
-            source_url=source_url,
-            additional_tags=[food.get("foodCategory", {}).get("description", "")]
+        metadata = Metadata(
+            version="0.1.0",
+            created=datetime.now().isoformat(),
+            last_updated=datetime.now().isoformat(),
+            source_urls=[source_url],
+            source_ids={
+                "usda_id": str(food.get('fdcId', ''))
+            }
         )
         
         # Map category
@@ -121,7 +125,7 @@ class FoodDataTransformer:
             "standard_nutrients": standard_nutrients,
             "brain_nutrients": brain_nutrients
         }
-        completeness = calculate_nutrient_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
+        completeness = calculate_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
 
         transformed = FoodData(
             food_id=food_id,
@@ -175,11 +179,14 @@ class FoodDataTransformer:
         
         # Create metadata
         source_url = f"https://world.openfoodfacts.org/product/{product.get('code', '')}"
-        metadata = create_food_metadata(
-            source="off",
-            original_id=product.get('code', ''),
-            source_url=source_url,
-            additional_tags=product.get("categories_tags", [])
+        metadata = Metadata(
+            version="0.1.0",
+            created=datetime.now().isoformat(),
+            last_updated=datetime.now().isoformat(),
+            source_urls=[source_url],
+            source_ids={
+                "off_id": str(product.get('code', ''))
+            }
         )
         
         if "image_url" in product:
@@ -197,7 +204,7 @@ class FoodDataTransformer:
             "standard_nutrients": standard_nutrients,
             "brain_nutrients": brain_nutrients
         }
-        completeness = calculate_nutrient_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
+        completeness = calculate_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
         
         # Calculate inflammatory index
         inflammatory_index = self._calculate_inflammatory_index(product, nutriments)
