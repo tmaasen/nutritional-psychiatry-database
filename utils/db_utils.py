@@ -6,17 +6,15 @@ This module provides utilities for database connection management, query executi
 and data import/export operations.
 """
 
-import os
 import json
 import logging
-import time
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union, Tuple
 from contextlib import contextmanager
-import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
 from psycopg2 import pool
 
-# Initialize logger
+from schema.food_data import FoodData
+
 logger = logging.getLogger(__name__)
 
 class PostgresClient:
@@ -191,7 +189,7 @@ class PostgresClient:
     
     # Food retrieval methods
     
-    def get_food_by_id(self, food_id: str) -> Optional[Dict]:
+    def get_food_by_id(self, food_id: str) -> Optional[FoodData]:
         """
         Get a complete food profile by ID.
         
@@ -202,14 +200,17 @@ class PostgresClient:
             Complete food data dictionary or None if not found
         """
         try:
-            return self.execute_query(
+            food_data = self.execute_query(
                 "SELECT get_complete_food_profile(%s) AS food_data",
                 (food_id,)
             )[0]['food_data']
+
+            return FoodData.from_dict(food_data)
         except Exception as e:
             logger.error(f"Error getting food {food_id}: {e}")
             raise
     
+
     # Data import/export methods for migration and backup only
     
     def import_food_from_json(self, food_json: Union[Dict, str]) -> str:
@@ -266,92 +267,3 @@ class PostgresClient:
         except Exception as e:
             logger.error(f"Error exporting food {food_id}: {e}")
             raise
-    
-    # Emergency file-based operations
-    # These methods are for migration/backup only and should be used sparingly
-    
-    def backup_to_file(self, food_id: str, file_path: str) -> None:
-        """
-        Backup a food to a local file (for migration/emergency use only).
-        
-        Args:
-            food_id: Food ID to export
-            file_path: File path to save JSON
-        """
-        logger.warning("Using local file backup - not recommended for production")
-        
-        try:
-            food_data = self.export_food_to_json(food_id)
-            
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w') as f:
-                json.dump(food_data, f, indent=2)
-                
-            logger.info(f"Backed up food {food_id} to {file_path}")
-            
-        except Exception as e:
-            logger.error(f"Error backing up food {food_id}: {e}")
-            raise
-    
-    def restore_from_file(self, file_path: str) -> str:
-        """
-        Restore a food from a local file (for migration/emergency use only).
-        
-        Args:
-            file_path: File path to load JSON from
-            
-        Returns:
-            Food ID of the imported food
-        """
-        logger.warning("Using local file restore - not recommended for production")
-        
-        try:
-            with open(file_path, 'r') as f:
-                food_data = json.load(f)
-            
-            return self.import_food_from_json(food_data)
-            
-        except Exception as e:
-            logger.error(f"Error restoring from file {file_path}: {e}")
-            raise
-    
-    def get_foods_for_processing(
-        self, 
-        stage: str, 
-        force_reprocess: bool = False,
-        limit: int = 100, 
-        offset: int = 0
-    ) -> List[Dict]:
-        """
-        Get foods that need processing for a specific stage.
-        
-        Args:
-            stage: Processing stage (processed, validated, etc.)
-            force_reprocess: Whether to include already processed foods
-            limit: Maximum number of foods to retrieve
-            offset: Offset for pagination
-            
-        Returns:
-            List of food data dictionaries
-        """
-        stages = {
-            "transform": "processed",
-            "validate": "validated",
-            "enrich": "enriched",
-            "calibrate": "calibrated"
-        }
-        
-        if stage not in stages:
-            raise ValueError(f"Invalid stage: {stage}")
-        
-        column = stages[stage]
-        
-        query = f"""
-        SELECT food_id, name, food_data 
-        FROM foods 
-        WHERE {column} = FALSE OR %s
-        ORDER BY food_id
-        LIMIT %s OFFSET %s
-        """
-        
-        return self.execute_query(query, (force_reprocess, limit, offset))

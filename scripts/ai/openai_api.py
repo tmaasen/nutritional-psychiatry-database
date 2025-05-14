@@ -29,7 +29,7 @@ from utils.db_utils import PostgresClient
 
 # Import data models
 from schema.food_data import (
-    BrainNutrients, Omega3, BioactiveCompounds, MentalHealthImpact, ResearchSupport
+    BrainNutrients, NutrientInteraction, Omega3, BioactiveCompounds, MentalHealthImpact, ResearchSupport
 )
 
 # Constants
@@ -56,19 +56,6 @@ class OpenAIAPI:
         request_timeout: int = REQUEST_TIMEOUT,
         rate_limit_delay: float = DEFAULT_RATE_LIMIT_DELAY
     ):
-        """
-        Initialize the OpenAI API client.
-        
-        Args:
-            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
-            models: Dictionary mapping task types to model names
-            db_client: Database client for persisting results
-            max_retries: Maximum number of retries for failed requests
-            backoff_factor: Backoff factor for exponential retry
-            request_timeout: Request timeout in seconds
-            rate_limit_delay: Delay between requests to respect rate limits
-        """
-        # Use environment variable if not provided
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set it as an argument or as OPENAI_API_KEY environment variable.")
@@ -80,25 +67,17 @@ class OpenAIAPI:
         self.request_timeout = request_timeout
         self.rate_limit_delay = rate_limit_delay
         
-        # Database client
-        self.db_client = db_client
-        
-        # Initialize OpenAI client
+        self.db_client = db_client        
         self.client = OpenAI(api_key=self.api_key, timeout=request_timeout)
-        
-        # Rate limiting
         self.last_request_time = 0
     
     def get_model_for_task(self, task_type: str) -> str:
-        """Get the appropriate model for a task type."""
         return self.models.get(task_type, self.models.get("fallback", "gpt-4o-mini"))
     
     def get_temperature_for_task(self, task_type: str) -> float:
-        """Get the appropriate temperature for a task type."""
         return TEMPERATURE_SETTINGS.get(task_type, 0.3)
     
     async def _apply_rate_limiting(self):
-        """Apply rate limiting to avoid hitting API rate limits."""
         current_time = time.time()
         time_since_last_request = current_time - self.last_request_time
         
@@ -155,7 +134,6 @@ class OpenAIAPI:
                 elif message.get("role") == "user":
                     user_message = message.get("content")
         
-            # Make request using Responses API with JSON mode
             response = await self.client.responses.create(
                 model=model,
                 instructions=instructions,
@@ -164,7 +142,6 @@ class OpenAIAPI:
                 text={"format": {"type": "json_object"}}
             )
         
-            # Handle response status
             if response.status == "incomplete":
                 if response.incomplete_details.reason == "max_output_tokens":
                     raise ValueError("Response incomplete due to output token limit")
@@ -172,14 +149,12 @@ class OpenAIAPI:
                     raise ValueError("Response incomplete due to content filter")
             
             if response.status == "completed":
-                # Log response
                 log_api_response(logger, "openai", task_type, response.output_text)
                 return response.output_text
             
             raise ValueError(f"Unexpected response status: {response.status}")
             
         except Exception as e:
-            # Log error
             context = {
                 "task_type": task_type,
                 "model": model,
@@ -215,13 +190,13 @@ class OpenAIAPI:
             
             # Update with prediction data
             if prediction_type == "brain_nutrients":
-                food_data["brain_nutrients"] = data
-                food_data["data_quality"]["brain_nutrients_source"] = "ai_generated"
+                food_data.brain_nutrients = data
+                food_data.data_quality.brain_nutrients_source = "ai_generated"
             elif prediction_type == "bioactive_compounds":
-                food_data["bioactive_compounds"] = data
+                food_data.bioactive_compounds = data
             elif prediction_type == "mental_health_impacts":
-                food_data["mental_health_impacts"] = data
-                food_data["data_quality"]["impacts_source"] = "ai_generated"
+                food_data.mental_health_impacts = data
+                food_data.data_quality.impacts_source = "ai_generated"
             
             # Save to database
             await self.db_client.import_food_from_json(food_data)
@@ -242,24 +217,7 @@ class OpenAIAPI:
         food_id: Optional[str] = None,
         scientific_context: Optional[str] = None,
         reference_foods: Optional[Dict] = None
-    ) -> Dict:
-        """
-        Predict missing brain-specific nutrients for a food.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            standard_nutrients: Dictionary of standard nutrients
-            existing_brain_nutrients: Dictionary of known brain nutrients
-            target_nutrients: List of nutrients to predict
-            food_id: Optional food ID for saving to database
-            scientific_context: Optional scientific context for the food
-            reference_foods: Optional reference foods with known values
-            
-        Returns:
-            Dictionary of predicted nutrient values with confidence scores
-        """
-        # Prepare template variables
+    ) -> BrainNutrients:
         variables = {
             "food_name": food_name,
             "food_category": food_category,
@@ -273,7 +231,6 @@ class OpenAIAPI:
         # Create messages from template
         messages = TemplateManager.create_messages_from_template("brain_nutrient_prediction", variables)
         
-        # Make API request
         response = await self.complete("nutrient_prediction", messages)
         
         try:
@@ -282,7 +239,7 @@ class OpenAIAPI:
             
             # Create BrainNutrients object to validate structure
             # Note: We can't use full validation here since we only have partial data
-            brain_nutrients_dict = {}
+            brain_nutrients_dict = BrainNutrients()
             
             # Process normal brain nutrients
             for nutrient, value in predicted_nutrients.items():
@@ -293,7 +250,7 @@ class OpenAIAPI:
                     # Skip omega-3 for separate handling
                     continue
                 
-                brain_nutrients_dict[nutrient] = value
+                brain_nutrients_dict.nutrients[nutrient] = value
             
             # Process omega-3 nutrients if present
             omega3_dict = {}
@@ -319,11 +276,11 @@ class OpenAIAPI:
             
             # Add omega3 object if we have data
             if omega3_dict:
-                brain_nutrients_dict["omega3"] = omega3_dict
+                brain_nutrients_dict.omega3 = omega3_dict
             
             # Save to database if ID provided
             if food_id and self.db_client:
-                await self.save_prediction(food_id, "brain_nutrients", brain_nutrients_dict)
+                await self.save_prediction(food_id, "brain_nutrients", brain_nutrients_dict.to_dict())
             
             return brain_nutrients_dict
             
@@ -342,22 +299,7 @@ class OpenAIAPI:
         scientific_context: Optional[str] = None,
         processing_method: Optional[str] = None,
         additional_compounds: Optional[str] = None
-    ) -> Dict:
-        """
-        Predict bioactive compounds for a food.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            standard_nutrients: Dictionary of standard nutrients
-            food_id: Optional food ID for saving to database
-            scientific_context: Optional scientific context
-            processing_method: Optional processing/cooking method
-            additional_compounds: Optional additional compounds to predict
-            
-        Returns:
-            Dictionary of predicted bioactive compounds with confidence scores
-        """
+    ) -> BioactiveCompounds:
         # Prepare template variables
         variables = {
             "food_name": food_name,
@@ -371,7 +313,6 @@ class OpenAIAPI:
         # Create messages from template
         messages = TemplateManager.create_messages_from_template("bioactive_compounds_prediction", variables)
         
-        # Make API request
         response = await self.complete("bioactive_prediction", messages)
         
         try:
@@ -379,22 +320,22 @@ class OpenAIAPI:
             predicted = JSONParser.parse_json(response, {})
             
             # Filter to just the bioactive compounds and their confidence
-            bioactive_dict = {}
+            bioactive_dict = BioactiveCompounds()
             
             for key, value in predicted.items():
                 if key.startswith("confidence_") or key == "reasoning":
                     continue
                 
-                bioactive_dict[key] = value
+                bioactive_dict.compounds[key] = value
                 
                 # Include confidence if present
                 conf_key = f"confidence_{key}"
                 if conf_key in predicted:
-                    bioactive_dict[conf_key] = predicted[conf_key]
+                    bioactive_dict.confidence[conf_key] = predicted[conf_key]
             
             # Save to database if ID provided
             if food_id and self.db_client:
-                await self.save_prediction(food_id, "bioactive_compounds", bioactive_dict)
+                await self.save_prediction(food_id, "bioactive_compounds", bioactive_dict.to_dict())
             
             return bioactive_dict
             
@@ -414,23 +355,7 @@ class OpenAIAPI:
         food_id: Optional[str] = None,
         scientific_context: Optional[str] = None,
         max_impacts: int = 4
-    ) -> List[Dict]:
-        """
-        Generate mental health impacts for a food.
-        
-        Args:
-            food_name: Name of the food
-            food_category: Food category
-            standard_nutrients: Dictionary of standard nutrients
-            brain_nutrients: Dictionary of brain nutrients
-            bioactive_compounds: Dictionary of bioactive compounds
-            food_id: Optional food ID for saving to database
-            scientific_context: Optional scientific context
-            max_impacts: Maximum number of impacts to generate
-            
-        Returns:
-            List of dictionaries with mental health impacts
-        """
+    ) -> List[MentalHealthImpact]:
         # Prepare template variables
         variables = {
             "food_name": food_name,
@@ -445,7 +370,6 @@ class OpenAIAPI:
         # Create messages from template
         messages = TemplateManager.create_messages_from_template("mental_health_impacts", variables)
         
-        # Make API request
         response = await self.complete("impact_generation", messages)
         
         try:
@@ -453,30 +377,30 @@ class OpenAIAPI:
             parsed = JSONParser.parse_json(response, [])
             
             # Handle case where the result isn't a list
-            impacts = []
+            impacts = MentalHealthImpact()
             if isinstance(parsed, list):
-                impacts = parsed
+                impacts.impacts = parsed
             elif isinstance(parsed, dict) and "impacts" in parsed:
-                impacts = parsed["impacts"]
+                impacts.impacts = parsed["impacts"]
             else:
-                impacts = [parsed]  # Treat as single impact
+                impacts.impacts = [parsed]  # Treat as single impact
             
             # Validate each impact
             valid_impacts = []
             required_fields = ["impact_type", "direction", "mechanism", "strength", "confidence"]
             
-            for impact in impacts:
+            for impact in impacts.impacts:
                 if isinstance(impact, dict) and all(field in impact for field in required_fields):
                     # Convert research support to proper format if needed
                     if "research_citations" in impact and "research_support" not in impact:
-                        impact["research_support"] = []
+                        impact.research_support = []
                         for citation in impact["research_citations"]:
                             support = {"citation": citation}
                             if citation.startswith("PMID:"):
                                 support["pmid"] = citation.split(":", 1)[1].strip()
                             elif citation.startswith("DOI:"):
                                 support["doi"] = citation.split(":", 1)[1].strip()
-                            impact["research_support"].append(support)
+                            impact.research_support.append(support)
                     
                     valid_impacts.append(impact)
             
@@ -498,19 +422,7 @@ class OpenAIAPI:
         nutrient: str,
         impact: str,
         scientific_context: Optional[str] = None
-    ) -> Dict:
-        """
-        Extract detailed mechanism of action for a nutrient-impact relationship.
-        
-        Args:
-            food_name: Food name
-            nutrient: Nutrient name
-            impact: Mental health impact
-            scientific_context: Optional scientific context
-            
-        Returns:
-            Dictionary with mechanism details
-        """
+    ) -> NutrientInteraction:
         # Prepare template variables
         variables = {
             "food_name": food_name,
@@ -522,19 +434,18 @@ class OpenAIAPI:
         # Create messages from template
         messages = TemplateManager.create_messages_from_template("mechanism_extraction", variables)
         
-        # Make API request
         response = await self.complete("mechanism_identification", messages)
         
         try:
             # Parse the response
-            mechanism_data = JSONParser.parse_json(response, {})
+            mechanism_data = JSONParser.parse_json(response, NutrientInteraction())
             
             # Validate required fields
             required_fields = ["primary_pathway", "detailed_steps", "key_molecules", "confidence"]
-            if not JSONParser.validate_json_schema(mechanism_data, required_fields):
-                logger.warning(f"Mechanism response missing required fields: {mechanism_data}")
+            if not JSONParser.validate_json_schema(mechanism_data.to_dict(), required_fields):
+                logger.warning(f"Mechanism response missing required fields: {mechanism_data.to_dict()}")
             
-            return mechanism_data
+            return mechanism_data.to_dict()
             
         except Exception as e:
             logger.error(f"Error parsing mechanism extraction response: {e}")

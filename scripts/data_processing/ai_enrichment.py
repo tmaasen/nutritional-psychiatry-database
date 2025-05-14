@@ -10,7 +10,7 @@ import argparse
 from datetime import datetime
 
 # Import schema models
-from schema.food_data import FoodData
+from schema.food_data import BioactiveCompounds, BrainNutrients, DataQuality, FoodData, Metadata
 
 # Import utilities
 from utils.db_utils import PostgresClient
@@ -58,7 +58,7 @@ class AIEnrichmentEngine:
         
         logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
     
-    def enrich_brain_nutrients(self, food_data: Dict) -> Dict:
+    def enrich_brain_nutrients(self, food_data: FoodData) -> FoodData:
         """
         Enrich food data with missing brain-specific nutrients using AI.
         
@@ -68,8 +68,7 @@ class AIEnrichmentEngine:
         Returns:
             Enriched food data
         """
-        # Convert to FoodData object for type safety
-        food = FoodData.from_dict(food_data)
+        food = food_data
         
         # Make a copy of the data to avoid modifying the original
         enriched_data = food_data.copy()
@@ -109,7 +108,7 @@ class AIEnrichmentEngine:
             
             # Update the enriched data with predictions
             if 'brain_nutrients' not in enriched_data:
-                enriched_data['brain_nutrients'] = {}
+                enriched_data.brain_nutrients = BrainNutrients()
                 
             for nutrient_path, value in parsed_predictions.items():
                 if "." in nutrient_path:
@@ -126,11 +125,11 @@ class AIEnrichmentEngine:
             
             # Update data quality
             if 'data_quality' not in enriched_data:
-                enriched_data['data_quality'] = {}
+                enriched_data.data_quality = DataQuality()
             
             # Mark brain nutrients as AI generated if we added predictions
             if parsed_predictions:
-                enriched_data['data_quality']['brain_nutrients_source'] = 'ai_generated'
+                enriched_data.data_quality.brain_nutrients_source = 'ai_generated'
             
             logger.info(f"Successfully enriched brain nutrients for {food_name}")
             
@@ -139,7 +138,7 @@ class AIEnrichmentEngine:
         
         return enriched_data
     
-    def enrich_bioactive_compounds(self, food_data: Dict) -> Dict:
+    def enrich_bioactive_compounds(self, food_data: FoodData) -> FoodData:
         """
         Enrich food data with bioactive compounds using AI.
         
@@ -149,8 +148,7 @@ class AIEnrichmentEngine:
         Returns:
             Enriched food data
         """
-        # Convert to FoodData object for type safety
-        food = FoodData.from_dict(food_data)
+        food = food_data
         
         # Make a copy of the data to avoid modifying the original
         enriched_data = food_data.copy()
@@ -188,10 +186,10 @@ class AIEnrichmentEngine:
             
             # Update the enriched data with predictions
             if 'bioactive_compounds' not in enriched_data:
-                enriched_data['bioactive_compounds'] = {}
+                enriched_data.bioactive_compounds = BioactiveCompounds()
             
             for compound, value in parsed_compounds.items():
-                enriched_data['bioactive_compounds'][compound] = value
+                enriched_data.bioactive_compounds.compounds[compound] = value
             
             logger.info(f"Successfully enriched bioactive compounds for {food_name}")
             
@@ -200,7 +198,7 @@ class AIEnrichmentEngine:
         
         return enriched_data
     
-    def enrich_mental_health_impacts(self, food_data: Dict) -> Dict:
+    def enrich_mental_health_impacts(self, food_data: FoodData) -> FoodData:
         """
         Enrich food data with mental health impacts using AI.
         
@@ -210,8 +208,7 @@ class AIEnrichmentEngine:
         Returns:
             Enriched food data
         """
-        # Convert to FoodData object for type safety
-        food = FoodData.from_dict(food_data)
+        food = food_data
         
         # Make a copy of the data to avoid modifying the original
         enriched_data = food_data.copy()
@@ -221,9 +218,9 @@ class AIEnrichmentEngine:
         food_category = food.category
         
         # Get nutrients for context
-        standard_nutrients = food.standard_nutrients.__dict__ if food.standard_nutrients else {}
-        brain_nutrients = food.brain_nutrients.__dict__ if food.brain_nutrients else {}
-        bioactive_compounds = food.bioactive_compounds.__dict__ if food.bioactive_compounds else {}
+        standard_nutrients = food.standard_nutrients
+        brain_nutrients = food.brain_nutrients
+        bioactive_compounds = food.bioactive_compounds
         
         # Get existing mental health impacts
         existing_impacts = food.mental_health_impacts
@@ -249,14 +246,14 @@ class AIEnrichmentEngine:
             parsed_impacts = parse_mental_health_impacts(predicted_impacts)
             
             # Update the enriched data with predictions
-            enriched_data['mental_health_impacts'] = parsed_impacts
+            enriched_data.mental_health_impacts = parsed_impacts
             
             # Update data quality
             if 'data_quality' not in enriched_data:
-                enriched_data['data_quality'] = {}
+                enriched_data.data_quality = DataQuality()
             
             # Mark impacts as AI generated
-            enriched_data['data_quality']['impacts_source'] = 'ai_generated'
+            enriched_data.data_quality.impacts_source = 'ai_generated'
             
             logger.info(f"Successfully enriched mental health impacts for {food_name}")
             
@@ -265,7 +262,7 @@ class AIEnrichmentEngine:
         
         return enriched_data
     
-    def fully_enrich_food(self, food_data: Dict) -> Dict:
+    def fully_enrich_food(self, food_data: FoodData) -> FoodData:
         """
         Apply all enrichment steps to a food item.
         
@@ -275,7 +272,7 @@ class AIEnrichmentEngine:
         Returns:
             Fully enriched food data
         """
-        food_name = food_data.get('name', 'Unknown food')
+        food_name = food_data.name
         logger.info(f"Beginning full enrichment for {food_name}")
         
         # Apply enrichment steps in sequence with rate limiting
@@ -291,16 +288,16 @@ class AIEnrichmentEngine:
         result = step3
         
         if 'metadata' not in result:
-            result['metadata'] = {}
+            result.metadata = Metadata()
         
-        result['metadata']['last_updated'] = datetime.now().isoformat()
+        result.metadata.last_updated = datetime.now().isoformat()
         
         # Calculate completeness
-        food_obj = FoodData.from_dict(result)
+        food_obj = result
         if 'data_quality' not in result:
-            result['data_quality'] = {}
+            result.data_quality = DataQuality()
             
-        result['data_quality']['completeness'] = food_obj.calculate_completeness()
+        result.data_quality.completeness = food_obj.calculate_completeness()
         
         logger.info(f"Completed full enrichment for {food_name}")
         return result

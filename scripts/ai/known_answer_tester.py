@@ -319,15 +319,6 @@ class KnownAnswerTester:
             metrics["confidence_calibration_error"] = sum_confidence_error / num_evaluations
     
     def _calibrate_confidence(self, evaluations: Dict[str, Dict]) -> Dict[str, Dict]:
-        """
-        Calibrate confidence ratings based on evaluation results.
-        
-        Args:
-            evaluations: Dictionary of evaluation results
-            
-        Returns:
-            Dictionary with calibrated confidence ratings
-        """
         calibrated = {}
         
         for key, eval_data in evaluations.items():

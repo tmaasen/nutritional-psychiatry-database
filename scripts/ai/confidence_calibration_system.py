@@ -43,27 +43,13 @@ class ConfidenceCalibrationSystem:
         batch_size: int = 100,
         dry_run: bool = False
     ):
-        """
-        Initialize the calibration system.
-        
-        Args:
-            db_client: PostgreSQL database client
-            evaluation_dir: Directory with evaluation results
-            batch_size: Number of foods to process in each batch
-            dry_run: If True, don't save changes to database
-        """
-        # Use provided database client or create a new one
         self.db_client = db_client or PostgresClient()
         
-        # Get configuration
         config = get_config()
-        
-        # Set up directories based on config
         self.evaluation_dir = evaluation_dir or config.get_directory("evaluation")
         if not self.evaluation_dir:
             self.evaluation_dir = os.path.join(config.data_dir, "evaluation")
         
-        # Processing settings
         self.batch_size = batch_size
         self.dry_run = dry_run
         
@@ -186,24 +172,9 @@ class ConfidenceCalibrationSystem:
                     version='0.1.0',
                     created=datetime.now().isoformat(),
                     last_updated=datetime.now().isoformat(),
+                    tags=['calibration']
                 )
             
-            # Update calibration metadata
-            food.metadata["last_updated"] = datetime.now().isoformat()
-            if "calibration" not in food.metadata:
-                food.metadata["calibration"] = {}
-                
-            food.metadata["calibration"] = {
-                "timestamp": datetime.now().isoformat(),
-                "method": "global_calibration_model",
-                "version": "1.0.0",
-                "adjustments_applied": {
-                    "global": self.calibration_model["global"]["overall_confidence_adjustment"],
-                    "nutrients_adjusted": list(self.calibration_model["global"]["nutrient_adjustments"].keys())
-                }
-            }
-            
-            # Convert back to dictionary
             return food.to_dict()
                 
         except Exception as e:

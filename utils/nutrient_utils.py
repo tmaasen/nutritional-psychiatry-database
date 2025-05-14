@@ -2,6 +2,7 @@
 import json
 import os
 from typing import Dict, List, Any, Optional
+from schema.food_data import StandardNutrients
 from utils.logging_utils import setup_logging
 logger = setup_logging(__name__)
 class NutrientUtils:
@@ -18,29 +19,15 @@ class NutrientUtils:
         return value * 1000000
     
     @staticmethod
-    def extract_nutrient_by_mapping(
+    def extract_nutrients_by_mapping(
         nutrient_data: List[Dict[str, Any]], 
         mapping: Dict[str, str],
         id_field: str = "id",
         value_field: str = "amount",
         unit_field: str = "unitName"
-    ) -> Dict[str, float]:
-        """
-        Extract nutrients from a list of nutrient objects using a mapping.
-        
-        Works with USDA, OpenFoodFacts, and other structured nutrient data.
-        
-        Args:
-            nutrient_data: List of nutrient objects
-            mapping: Dictionary mapping external nutrient IDs to schema field names
-            id_field: Field name containing the nutrient identifier
-            value_field: Field name containing the nutrient value
-            unit_field: Field name containing the unit information
-            
-        Returns:
-            Dictionary of extracted nutrients with schema field names as keys
-        """
-        extracted = {}
+    ) -> StandardNutrients:
+
+        extracted = StandardNutrients()
         
         for nutrient in nutrient_data:
             nutrient_id = str(nutrient.get(id_field, ""))
@@ -58,7 +45,7 @@ class NutrientUtils:
                     if unit == "µg":  # Convert micrograms to milligrams
                         value /= 1000
                     
-                    extracted[target_field] = value
+                    extracted.nutrients[target_field] = value
         
         return extracted
 

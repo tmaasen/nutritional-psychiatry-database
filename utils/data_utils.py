@@ -1,7 +1,9 @@
 
 import re
-from typing import Dict, Any, Optional, List
+from typing import Optional, List
 from datetime import datetime
+
+from schema.food_data import Metadata
 
 def generate_food_id(source: str, original_id: str) -> str:
     """
@@ -23,7 +25,7 @@ def create_food_metadata(
     original_id: str, 
     source_url: Optional[str] = None,
     additional_tags: Optional[List[str]] = None
-) -> Dict[str, Any]:
+) -> Metadata:
     """
     Create standardized metadata for food items.
     
@@ -38,16 +40,16 @@ def create_food_metadata(
     """
     now = datetime.now().isoformat()
     
-    metadata = {
-        "version": "0.1.0",
-        "created": now,
-        "last_updated": now,
-        "source_urls": [],
-        "source_ids": {
+    metadata = Metadata(
+        version="0.1.0",
+        created=now,
+        last_updated=now,
+        source_urls=[],
+        source_ids={
             f"{source.lower()}_id": original_id
         },
-        "tags": additional_tags or []
-    }
+        tags=additional_tags or []
+    )
     
     if source_url:
         metadata["source_urls"].append(source_url)
