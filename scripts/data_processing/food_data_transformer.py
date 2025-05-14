@@ -26,7 +26,7 @@ from constants.food_data_constants import (
     DEFAULT_CONFIDENCE_RATINGS,
     COMPLETENESS_REQUIRED_FIELDS
 )
-from utils.merge_utils import calculate_completeness
+from utils.data_utils import calculate_completeness
 from utils.nutrient_utils import NutrientUtils
 
 # Initialize logger

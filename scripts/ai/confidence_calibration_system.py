@@ -17,6 +17,7 @@ import json
 import glob
 import argparse
 from datetime import datetime
+import sys
 from typing import Dict, List, Optional, Tuple
 
 # Import project utilities

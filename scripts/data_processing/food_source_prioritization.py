@@ -17,9 +17,10 @@ from schema.food_data import (
 )
 
 # Import utilities
+from utils.data_utils import identify_source
 from utils.logging_utils import setup_logging
 from utils.db_utils import PostgresClient
-from utils.merge_utils import calculate_completeness
+from utils.data_utils import calculate_completeness
 
 # Import constants
 from constants.food_data_constants import (
@@ -39,51 +40,9 @@ class SourcePrioritizer:
         self.default_priorities = SOURCE_PRIORITY_MAPPING        
         self.confidence_thresholds = SOURCE_CONFIDENCE_THRESHOLDS
     
-    def identify_source(self, food_data: FoodData) -> str:
-        """
-        Identify the source of food data.
-        
-        Args:
-            food_data: Food data dictionary
-            
-        Returns:
-            Source identifier string
-        """
-        food_id = food_data.food_id
-        metadata = food_data.metadata
-        
-        if "source_ids" in metadata:
-            source_ids = metadata.source_ids
-            if "usda_fdc_id" in source_ids:
-                return "usda"
-            elif "openfoodfacts_id" in source_ids:
-                return "openfoodfacts"
-        
-        if food_id.startswith("usda_"):
-            return "usda"
-        elif food_id.startswith("off_"):
-            return "openfoodfacts"
-        elif food_id.startswith("lit_"):
-            return "literature"
-        elif food_id.startswith("ai_"):
-            return "ai_generated"
-        
-        # Check data quality attributes
-        data_quality = food_data.data_quality
-        if data_quality.brain_nutrients_source == "literature_derived":
-            return "literature"
-        elif data_quality.brain_nutrients_source == "ai_generated":
-            return "ai_generated"
-        
-        return "unknown"
-    
     def get_confidence(self, food_data: FoodData, section: str) -> float:
         """
         Get confidence rating for a specific section.
-        
-        Args:
-            food_data: Food data dictionary
-            section: Section name
             
         Returns:
             Confidence rating (0-10)
@@ -183,7 +142,7 @@ class SourcePrioritizer:
         # Try each source in priority order
         for source in priority_list:
             for entry in entries:
-                entry_source = self.identify_source(entry)
+                entry_source = identify_source(entry)
                 if entry_source != source:
                     continue
                 
@@ -218,7 +177,7 @@ class SourcePrioritizer:
         for nutrient in brain_nutrients:
             for source in priority_list:
                 for entry in entries:
-                    entry_source = self.identify_source(entry)
+                    entry_source = identify_source(entry)
                     if entry_source != source:
                         continue
                     
@@ -263,7 +222,7 @@ class SourcePrioritizer:
         for component in components:
             for source in priority_list:
                 for entry in entries:
-                    entry_source = self.identify_source(entry)
+                    entry_source = identify_source(entry)
                     if entry_source != source:
                         continue
                     
@@ -308,7 +267,7 @@ class SourcePrioritizer:
         # Find entry with most bioactive compounds from highest priority source
         for source in priority_list:
             for entry in entries:
-                entry_source = self.identify_source(entry)
+                entry_source = identify_source(entry)
                 if entry_source != source:
                     continue
                 
@@ -342,7 +301,7 @@ class SourcePrioritizer:
         
         for source in priority_list:
             for entry in entries:
-                entry_source = self.identify_source(entry)
+                entry_source = identify_source(entry)
                 if entry_source != source:
                     continue
                 
@@ -468,7 +427,7 @@ class SourcePrioritizer:
                 
                 # Filter by confidence
                 confidence = interaction.get("confidence", 0)
-                entry_source = self.identify_source(entry)
+                entry_source = identify_source(entry)
                 if confidence >= self.confidence_thresholds.get(entry_source, 0):
                     merged.nutrient_interactions.interactions.append(interaction)
                     existing_ids.add(interaction["interaction_id"])
@@ -482,7 +441,7 @@ class SourcePrioritizer:
             # Try to find in any entry
             for source in priority_list:
                 for entry in entries:
-                    entry_source = self.identify_source(entry)
+                    entry_source = identify_source(entry)
                     if entry_source != source:
                         continue
                     

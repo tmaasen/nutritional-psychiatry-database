@@ -13,7 +13,12 @@ This script orchestrates the end-to-end process of building the Nutritional Psyc
 Run this script to process foods through the entire pipeline or specific steps.
 """
 
+import os
 import sys
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
+
 import time
 from typing import List, Dict, Optional, Callable, Any, Set
 
@@ -592,12 +597,6 @@ class DatasetOrchestrator:
         return self.run_step(step_name, execute)
     
     def run_all(self) -> bool:
-        """
-        Run all steps in the pipeline.
-        
-        Returns:
-            Whether all steps completed successfully
-        """
         steps = [
             ("usda_data_collection", self.collect_usda_data, []),
             ("openfoodfacts_data_collection", self.collect_openfoodfacts_data, []),
