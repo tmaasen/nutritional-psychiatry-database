@@ -17,43 +17,22 @@ import requests
 from typing import Dict, List
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.db_utils import PostgresClient
-import logging
 from config import get_config
 
 from utils.api_utils import make_api_request
+from utils.logging_utils import setup_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging(__name__)
 
 class USDAFoodDataCentralAPI:
     """Client for the USDA FoodData Central API."""
         
     def __init__(self, api_key: str = None):
-        """Initialize the API client with an API key."""
         config = get_config()
         self.api_key = api_key or config.get_api_key("USDA")
         self.base_url = config.get_api_url("USDA")
-        
-        if not self.api_key:
-            raise ValueError("USDA API key is required. Set it in .env file or pass as argument.")
     
     def search_foods(self, query: str, page_size: int = 25, page_number: int = 1, data_type: str = "Foundation,SR Legacy,Survey (FNDDS),Branded") -> Dict:
-        """
-        Search for foods by name or keyword.
-        
-        Args:
-            query: Search terms
-            page_size: Number of results per page
-            page_number: Page number to return
-            data_type: Comma-separated list of data types to include
-        
-        Returns:
-            Dictionary containing search results
-        """
         url = f"{self.base_url}/foods/search"
         params = {
             'query': query,
@@ -137,7 +116,6 @@ def search_and_import(api_client: USDAFoodDataCentralAPI, db_client: PostgresCli
     imported_foods = []
     food_transformer = FoodDataTransformer()
     
-    # Search for food
     search_results = api_client.search_foods(search_term)
     
     if not search_results.get('foods'):
@@ -149,7 +127,6 @@ def search_and_import(api_client: USDAFoodDataCentralAPI, db_client: PostgresCli
     
     for food in top_results:
         try:
-            # Get the food ID
             fdc_id = food.get('fdcId')
             if not fdc_id:
                 continue

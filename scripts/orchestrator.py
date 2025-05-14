@@ -51,7 +51,6 @@ class DatasetOrchestrator:
     def __init__(
         self,
         config_file: Optional[str] = None,
-        api_keys: Optional[Dict[str, str]] = None,
         food_list: Optional[List[str]] = None,
         output_dir: Optional[str] = None,
         skip_steps: Optional[List[str]] = None,
@@ -59,63 +58,20 @@ class DatasetOrchestrator:
         batch_size: Optional[int] = None,
         force_reprocess: Optional[bool] = None
     ):
-        """
-        Initialize the orchestrator.
-
-        Args:
-            config_file: Path to configuration file
-            api_keys: Dictionary of API keys
-            food_list: List of foods to process
-            output_dir: Base directory for all data
-            skip_steps: List of steps to skip
-            only_steps: List of steps to run (ignores skip_steps if provided)
-            batch_size: Number of foods to process in each batch
-            force_reprocess: Whether to reprocess existing files
-        """
-        # Load configuration
         self.config = get_config(config_file)
         
         # Override config with arguments if provided
-        self.api_keys = api_keys or {}
+        self.api_keys = self.config.api_keys or {}
         self.food_list = food_list or []
         self.output_dir = output_dir or self.config.data_dir
         self.skip_steps = skip_steps or []
         self.only_steps = only_steps
         self.batch_size = batch_size or self.config.processing.get("batch_size", 10)
         self.force_reprocess = force_reprocess if force_reprocess is not None else self.config.processing.get("force_reprocess", False)
-        self.continue_on_failure = self.config.continue_on_failure
         
-        # Initialize database client
-        self.db_client = PostgresClient()
-        
-        # Initialize step tracking
+        self.db_client = PostgresClient()        
         self.completed_steps: Set[str] = set()
-        
-        # Validate API keys
-        self._validate_api_keys()
-        
-        # Initialize processors
         self._initialize_processors()
-    
-    def _validate_api_keys(self):
-        """Validate required API keys by checking their existence."""
-        required_keys = {
-            "USDA_API_KEY": "USDA FoodData Central API key",
-            "OPENAI_API_KEY": "OpenAI API key"
-        }
-        
-        missing_keys = []
-        for key, description in required_keys.items():
-            api_key = self.api_keys.get(key) or self.config.get_api_key(key.split("_")[0])
-            if not api_key:
-                missing_keys.append(f"{key} ({description})")
-        
-        if missing_keys:
-            error_msg = f"Missing required API keys: {', '.join(missing_keys)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        
-        logger.info("API keys validated successfully")
     
     def _initialize_processors(self):
         """Initialize all data processors and API clients."""
@@ -157,18 +113,6 @@ class DatasetOrchestrator:
         step_func: Callable[[], Any], 
         dependencies: Optional[List[str]] = None
     ) -> Any:
-        """
-        Run a step by calling a function directly.
-        
-        Args:
-            step_name: Name of the step
-            step_func: Function to call
-            dependencies: List of step names that must complete before this step
-            
-        Returns:
-            Return value from the step function
-        """
-        # Check if step should be run
         if not self._should_run_step(step_name):
             logger.info(f"Skipping step: {step_name}")
             return None
@@ -197,9 +141,7 @@ class DatasetOrchestrator:
             
         except Exception as e:
             logger.error(f"Error running step {step_name}: {e}", exc_info=True)
-            if not self.continue_on_failure:
-                raise
-            return None
+            raise
     
     def collect_usda_data(self) -> List[str]:
         """Collect food data from USDA FoodData Central."""
@@ -237,8 +179,7 @@ class DatasetOrchestrator:
                     
                     except Exception as e:
                         logger.error(f"Error processing {food_query}: {e}", exc_info=True)
-                        if not self.continue_on_failure:
-                            raise
+                        raise
                 
                 # Slight delay between batches to avoid rate limiting
                 if i + self.batch_size < len(self.food_list):
@@ -284,8 +225,7 @@ class DatasetOrchestrator:
                     
                     except Exception as e:
                         logger.error(f"Error processing {food_query}: {e}", exc_info=True)
-                        if not self.continue_on_failure:
-                            raise
+                        raise
                 
                 # Slight delay between batches to avoid rate limiting
                 if i + self.batch_size < len(self.food_list):
@@ -336,8 +276,7 @@ class DatasetOrchestrator:
                 
                 except Exception as e:
                     logger.error(f"Error processing literature source: {e}", exc_info=True)
-                    if not self.continue_on_failure:
-                        raise
+                    raise
             
             return saved_ids
         
@@ -414,8 +353,7 @@ class DatasetOrchestrator:
                         
                         except Exception as e:
                             logger.error(f"Error transforming {food_name}: {e}", exc_info=True)
-                            if not self.continue_on_failure:
-                                raise
+                            raise
                     
                     # Move to next batch
                     offset += batch_size
@@ -426,9 +364,7 @@ class DatasetOrchestrator:
                 
                 except Exception as e:
                     logger.error(f"Error processing transformation batch: {e}", exc_info=True)
-                    if not self.continue_on_failure:
-                        raise
-                    break
+                    raise
             
             return transformed_ids
         
@@ -451,9 +387,7 @@ class DatasetOrchestrator:
                 
             except Exception as e:
                 logger.error(f"Error during AI enrichment: {e}", exc_info=True)
-                if not self.continue_on_failure:
-                    raise
-                return []
+                raise
         
         return self.run_step(step_name, execute)
     
@@ -533,9 +467,7 @@ class DatasetOrchestrator:
                                 "name": food_name,
                                 "error": str(e)
                             })
-                            
-                            if not self.continue_on_failure:
-                                raise
+                            raise
                     
                     # Move to next batch
                     offset += batch_size
@@ -546,9 +478,7 @@ class DatasetOrchestrator:
                 
                 except Exception as e:
                     logger.error(f"Error processing validation batch: {e}", exc_info=True)
-                    if not self.continue_on_failure:
-                        raise
-                    break
+                    raise
             
             return validation_results
         
@@ -567,14 +497,8 @@ class DatasetOrchestrator:
                 
             except Exception as e:
                 logger.error(f"Error during confidence calibration: {e}", exc_info=True)
-                if not self.continue_on_failure:
-                    raise
-                return {
-                    "error": str(e),
-                    "successfully_calibrated": 0,
-                    "failed": 0
-                }
-        
+                raise
+                
         return self.run_step(step_name, execute)
     
     def merge_sources(self) -> List[str]:
@@ -590,9 +514,7 @@ class DatasetOrchestrator:
                 
             except Exception as e:
                 logger.error(f"Error during source merging: {e}", exc_info=True)
-                if not self.continue_on_failure:
-                    raise
-                return []
+                raise
         
         return self.run_step(step_name, execute)
     
@@ -611,7 +533,7 @@ class DatasetOrchestrator:
         success = True
         for step_name, step_func, dependencies in steps:
             result = self.run_step(step_name, step_func, dependencies)
-            if result is None and not self.continue_on_failure:
+            if result is None:
                 success = False
                 logger.error(f"Step {step_name} failed")
                 break
@@ -679,11 +601,6 @@ def main():
     args = parser.parse_args()
     
     try:
-        # Create custom config with command line overrides
-        config = get_config(args.config)
-        if args.continue_on_failure:
-            config.continue_on_failure = True
-        
         orchestrator = DatasetOrchestrator(
             config_file=args.config,
             food_list=args.foods,

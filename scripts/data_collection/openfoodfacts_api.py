@@ -3,26 +3,21 @@ OpenFoodFacts API Integration with Python-native Schema
 This script interfaces with the OpenFoodFacts API to retrieve food data.
 """
 
-# Standard imports
 from typing import Dict, List
 
-# Project utilities
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.db_utils import PostgresClient
 from utils.api_utils import make_api_request
 from utils.logging_utils import setup_logging
 
-# Constants
 from constants.food_data_constants import OFF_DEFAULT_FIELDS
 
-# Initialize logger
 logger = setup_logging(__name__)
 
 class OpenFoodFactsAPI:
     """Client for the OpenFoodFacts API."""
     
     def __init__(self, user_agent: str = None, base_url: str = None):
-        """Initialize the API client with user agent information."""
         self.user_agent = user_agent or "NutritionalPsychiatryDataset/1.0"
         self.base_url = base_url or "https://world.openfoodfacts.org/api/v2"
         self.headers = {"User-Agent": self.user_agent}
@@ -34,9 +29,6 @@ class OpenFoodFactsAPI:
                         page: int = 1, 
                         page_size: int = 20,
                         fields: str = None) -> Dict:
-        """
-        Search for products in the OpenFoodFacts database.
-        """
         endpoint = f"{self.base_url}/search"
         
         if fields is None:
@@ -106,7 +98,6 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
     logger.info(f"Searching for '{query}'")
     food_transformer = FoodDataTransformer()
     
-    # Search for products
     results = api_client.search_products(query)
     
     if not results.get("products"):
@@ -131,7 +122,6 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
     return imported_foods
 
 def main():
-    """Main function to execute the script."""
     import argparse
     
     parser = argparse.ArgumentParser(description="Fetch and transform OpenFoodFacts data")
@@ -141,13 +131,9 @@ def main():
     args = parser.parse_args()
     
     try:
-        # Instantiate database client
-        db_client = PostgresClient()
-        
-        # Create API client
+        db_client = PostgresClient()        
         api_client = OpenFoodFactsAPI()
         
-        # Search and import
         imported_foods = search_and_import(
             api_client=api_client,
             db_client=db_client,

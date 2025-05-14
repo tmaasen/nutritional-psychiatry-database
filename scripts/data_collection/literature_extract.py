@@ -8,11 +8,12 @@ focusing on food-mood relationships, mechanisms, and evidence quality.
 
 import argparse
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-# Project imports
-from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT, LITERATURE_CONFIDENCE_DEFAULT, LITERATURE_COMPLETENESS_DEFAULT
+from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT
+from constants.literature_constants import LITERATURE_COMPLETENESS_DEFAULT, LITERATURE_CONFIDENCE_DEFAULT
 
+from schema.food_data import DataQuality, FoodData, MentalHealthImpact, Metadata, ResearchSupport
 from utils.logging_utils import setup_logging
 from utils.db_utils import PostgresClient
 from utils.document_utils import PDFExtractor, WebPageExtractor
@@ -20,23 +21,13 @@ from utils.research_utils import EvidenceClassifier, RelationshipExtractor
 from utils.nutrient_utils import NutrientNameNormalizer
 from config import get_config
 
-# Initialize logger
 logger = setup_logging(__name__)
 
 class LiteratureExtractor:
     """Extracts structured data from scientific literature for nutritional psychiatry."""
     
     def __init__(self, db_client: PostgresClient = None):
-        """
-        Initialize the extractor with database client.
-        
-        Args:
-            db_client: PostgreSQL database client
-        """
-        # Get configuration
-        self.config = get_config()
-        
-        # Initialize database client if not provided
+        self.config = get_config()        
         self.db_client = db_client or PostgresClient()
         
         # Initialize components
@@ -45,21 +36,22 @@ class LiteratureExtractor:
         self.relationship_extractor = RelationshipExtractor(self.nutrient_normalizer, self.evidence_classifier)
         self.pdf_extractor = PDFExtractor()
         self.web_extractor = WebPageExtractor()
-    
-    def process_pdf(self, pdf_path: str) -> str:
+
+    def process_literature(self, pdf_path: Optional[str] = None, url: Optional[str] = None) -> str:
         """
-        Process a PDF file and extract relationships.
+        Process a PDF file or URL and extract relationships.
         
-        Args:
-            pdf_path: Path to PDF file
-            
         Returns:
             Food ID of the imported data
         """
-        logger.info(f"Processing PDF: {pdf_path}")
-        
-        # Extract text and metadata
-        text, metadata = self.pdf_extractor.extract_text(pdf_path)
+        if pdf_path:
+            logger.info(f"Processing PDF: {pdf_path}")
+            text, metadata = self.pdf_extractor.extract_text(pdf_path)
+        elif url:
+            logger.info(f"Processing URL: {url}")
+            text, metadata = self.web_extractor.extract_text(url)
+        else:
+            raise ValueError("Either pdf_path or url must be provided")
         
         if not text or not metadata:
             logger.warning(f"Failed to extract text or metadata from {pdf_path}")
@@ -78,48 +70,7 @@ class LiteratureExtractor:
         
         return food_id
     
-    def process_url(self, url: str) -> str:
-        """
-        Process a web page and extract relationships.
-        
-        Args:
-            url: URL of web page
-            
-        Returns:
-            Food ID of the imported data
-        """
-        logger.info(f"Processing URL: {url}")
-        
-        # Extract text and metadata
-        text, metadata = self.web_extractor.extract_text(url)
-        
-        if not text or not metadata:
-            logger.warning(f"Failed to extract text or metadata from {url}")
-            return ""
-
-        # Extract relationships
-        relationships = self.relationship_extractor.extract_relationships(text, metadata)
-        logger.info(f"Extracted {len(relationships)} relationships from {url}")
-        
-        # Convert to schema format
-        food_data = self._relationships_to_food_data(relationships)
-        
-        # Save to database
-        food_id = self.db_client.import_food_from_json(food_data)
-        logger.info(f"Imported literature data with ID: {food_id}")
-        
-        return food_id
-    
-    def _relationships_to_food_data(self, relationships: List) -> Dict:
-        """
-        Convert extracted relationships to FoodData schema.
-        
-        Args:
-            relationships: List of extracted relationships
-            
-        Returns:
-            Dictionary in FoodData schema format
-        """
+    def _relationships_to_food_data(self, relationships: List) -> FoodData:
         if not relationships:
             return {}
         
@@ -153,37 +104,36 @@ class LiteratureExtractor:
                 if nutrient in BRAIN_NUTRIENTS_TO_PREDICT and rel.direction == "positive":
                     brain_nutrients[nutrient] = "literature_evidence"
             
-            # Create food data
-            food_data = {
-                "food_id": food_id,
-                "name": food_name,
-                "category": "Literature-derived",
-                "mental_health_impacts": mental_health_impacts,
-                "data_quality": {
-                    "completeness": LITERATURE_COMPLETENESS_DEFAULT,  # Use constant instead of hardcoded value
-                    "overall_confidence": LITERATURE_CONFIDENCE_DEFAULT,  # Use constant instead of hardcoded value
-                    "brain_nutrients_source": "literature_derived",
-                    "impacts_source": "literature_review"
-                },
-                "metadata": {
-                    "version": "0.1.0",
-                    "created": datetime.now().isoformat(),
-                    "last_updated": datetime.now().isoformat(),
-                    "source_urls": [],
-                    "tags": ["literature-derived"]
-                }
-            }
+            food_data = FoodData(
+                food_id=food_id,
+                name=food_name,
+                category="Literature-derived",
+                mental_health_impacts=mental_health_impacts,
+                data_quality=DataQuality(
+                    completeness=LITERATURE_COMPLETENESS_DEFAULT,  # Use constant instead of hardcoded value
+                    overall_confidence=LITERATURE_CONFIDENCE_DEFAULT,  # Use constant instead of hardcoded value
+                    brain_nutrients_source="literature_derived",
+                    impacts_source="literature_review"
+                ),
+                metadata=Metadata(
+                    version="0.1.0",
+                    created=datetime.now().isoformat(),
+                    last_updated=datetime.now().isoformat(),
+                    source_urls=[],
+                    tags=["literature-derived"]
+                )
+            )
             
             # Add brain nutrients if found
             if brain_nutrients:
-                food_data["brain_nutrients"] = brain_nutrients
+                food_data.brain_nutrients = brain_nutrients
             
             # Add source URLs from relationships
             for rel in food_rels:
                 if rel.study_metadata.doi:
                     source_url = f"https://doi.org/{rel.study_metadata.doi}"
-                    if source_url not in food_data["metadata"]["source_urls"]:
-                        food_data["metadata"]["source_urls"].append(source_url)
+                    if source_url not in food_data.metadata.source_urls:
+                        food_data.metadata.source_urls.append(source_url)
             
             # Use the first relationship's food as the result
             if not result:
@@ -191,16 +141,7 @@ class LiteratureExtractor:
         
         return result
     
-    def _create_mental_health_impact(self, relationship) -> Dict:
-        """
-        Convert relationship to mental health impact format.
-        
-        Args:
-            relationship: Extracted relationship
-            
-        Returns:
-            Mental health impact dictionary
-        """
+    def _create_mental_health_impact(self, relationship) -> MentalHealthImpact:
         # Map relationship direction to schema format
         direction_mapping = {
             "positive": "positive",
@@ -244,39 +185,31 @@ class LiteratureExtractor:
         else:
             citation_doi = None
         
-        # Create impact
-        return {
-            "impact_type": impact_type,
-            "direction": direction_mapping.get(relationship.direction, "mixed"),
-            "mechanism": relationship.mechanism or f"Effect on {relationship.mental_health_outcome}",
-            "strength": min(relationship.confidence, 9),  # Slightly lower than confidence
-            "confidence": relationship.confidence,
-            "time_to_effect": time_to_effect,
-            "research_context": f"Based on {relationship.evidence_type} study",
-            "research_support": [
-                {
-                    "citation": citation,
-                    "doi": citation_doi,
-                    "study_type": relationship.evidence_type,
-                    "year": relationship.study_metadata.year
-                }
-            ]
-        }
+        return MentalHealthImpact(
+            impact_type=impact_type,
+            direction=direction_mapping.get(relationship.direction, "mixed"),
+            mechanism=relationship.mechanism or f"Effect on {relationship.mental_health_outcome}",
+            strength=min(relationship.confidence, 9),  # Slightly lower than confidence
+            confidence=relationship.confidence,
+            time_to_effect=time_to_effect,
+            research_context=f"Based on {relationship.evidence_type} study",
+            research_support=ResearchSupport(
+                citation=citation,
+                doi=citation_doi,
+                study_type=relationship.evidence_type,
+                year=relationship.study_metadata.year
+            )
+        )
     
 def main():
-    """Main function to process literature."""
     parser = argparse.ArgumentParser(description="Extract data from PDFs and URLs.")
     parser.add_argument("--pdfs", nargs="*", help="List of PDF file paths")
     parser.add_argument("--urls", nargs="*", help="List of URLs")
     args = parser.parse_args()
 
-    # Initialize DB client
     db_client = PostgresClient()
-
-    # Initialize LiteratureExtractor
     extractor = LiteratureExtractor(db_client)
 
-    # Track processed IDs
     processed_ids = []
 
     # Process PDFs
