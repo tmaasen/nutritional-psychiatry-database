@@ -18,7 +18,7 @@ class OpenFoodFactsAPI:
     """Client for the OpenFoodFacts API."""
     
     def __init__(self, user_agent: str = None, base_url: str = None):
-        self.user_agent = user_agent or "NutritionalPsychiatryDataset/1.0"
+        self.user_agent = user_agent or "NutritionalPsychiatryDatabase/1.0"
         self.base_url = base_url or "https://world.openfoodfacts.org/api/v2"
         self.headers = {"User-Agent": self.user_agent}
     

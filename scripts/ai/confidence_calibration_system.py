@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Confidence Calibration System for Nutritional Psychiatry Dataset
+Confidence Calibration System for Nutritional Psychiatry Database
 
-This script applies confidence calibration to the entire dataset:
+This script applies confidence calibration to the entire database:
 - Adjusts confidence ratings based on global accuracy metrics
 - Ensures consistency across similar foods
 - Applies food-category specific adjustments
-- Produces a calibrated version of the dataset
+- Produces a calibrated version of the database
 
 This version uses the database directly instead of file I/O and leverages
 the established data models for better type safety and validation.
@@ -35,7 +35,7 @@ from schema.food_data import (
 logger = setup_logging(__name__)
 
 class ConfidenceCalibrationSystem:
-    """System for calibrating confidence ratings in the nutritional psychiatry dataset."""
+    """System for calibrating confidence ratings in the nutritional psychiatry database."""
     
     def __init__(
         self,
@@ -418,9 +418,9 @@ class ConfidenceCalibrationSystem:
         
         return success_count, failure_count
     
-    def calibrate_dataset(self) -> Dict[str, int]:
+    def calibrate_database(self) -> Dict[str, int]:
         """
-        Calibrate the entire dataset.
+        Calibrate the entire database.
         
         Returns:
             Dictionary with statistics about calibration process
@@ -476,7 +476,7 @@ class ConfidenceCalibrationSystem:
 
 def main():
     """Main function to execute calibration."""
-    parser = argparse.ArgumentParser(description="Calibrate confidence ratings in dataset")
+    parser = argparse.ArgumentParser(description="Calibrate confidence ratings in database")
     parser.add_argument("--evaluation-dir", help="Directory with evaluation results")
     parser.add_argument("--batch-size", type=int, default=100, help="Batch size for processing")
     parser.add_argument("--dry-run", action="store_true", help="Run without saving changes")
@@ -496,7 +496,7 @@ def main():
         )
         
         # Run calibration
-        stats = calibrator.calibrate_dataset()
+        stats = calibrator.calibrate_database()
         
         # Print summary
         print("\nCalibration Summary:")

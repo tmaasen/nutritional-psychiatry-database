@@ -1,6 +1,6 @@
-# Contributing to the Nutritional Psychiatry Dataset
+# Contributing to the Nutritional Psychiatry Database
 
-Thank you for your interest in contributing to the Nutritional Psychiatry Dataset! This project aims to create a comprehensive open-source dataset connecting food nutrients to mental health impacts. Your contributions will help advance the field of nutritional psychiatry and support applications promoting mental wellness through nutrition.
+Thank you for your interest in contributing to the Nutritional Psychiatry Database! This project aims to create a comprehensive open-source database connecting food nutrients to mental health impacts. Your contributions will help advance the field of nutritional psychiatry and support applications promoting mental wellness through nutrition.
 
 ## How to Contribute
 
@@ -20,13 +20,13 @@ If you have expertise in nutrition, neuroscience, or mental health:
 If you have technical skills:
 
 - **Code Contributions**: Improve our data processing pipelines or AI enrichment scripts
-- **Data Visualization**: Create visualizations to help understand the dataset
-- **API Development**: Help build APIs for accessing the dataset
+- **Data Visualization**: Create visualizations to help understand the database
+- **API Development**: Help build APIs for accessing the database
 - **Documentation**: Improve technical documentation and examples
 
-### 3. Dataset Expansion
+### 3. Database Expansion
 
-- **New Food Entries**: Contribute data for foods not yet in the dataset
+- **New Food Entries**: Contribute data for foods not yet in the database
 - **Additional Nutrients**: Add data for new brain-specific nutrients
 - **Bioactive Compounds**: Contribute data on bioactive compounds
 - **Mental Health Impacts**: Add evidence-based mental health impacts with citations
@@ -82,8 +82,8 @@ For AI-generated contributions:
 
 ```bash
 # Clone your fork of the repository
-git clone https://github.com/your-username/nutritional-psychiatry-dataset.git
-cd nutritional-psychiatry-dataset
+git clone https://github.com/your-username/nutritional-psychiatry-database.git
+cd nutritional-psychiatry-database
 
 # Install dependencies
 pip install -r requirements.txt
@@ -98,7 +98,7 @@ export OPENAI_API_KEY=your_openai_key  # Only needed for AI enrichment
 Familiarize yourself with the project structure:
 
 ```
-nutritional-psychiatry-dataset/
+nutritional-psychiatry-database/
 ├── README.md                       # Project overview
 ├── LICENSE                         # MIT license
 ├── CONTRIBUTING.md                 # This file
@@ -107,7 +107,7 @@ nutritional-psychiatry-dataset/
 │   ├── data_collection/           
 │   ├── data_processing/            
 │   └── ai/                         
-├── data/                           # The dataset
+├── data/                           # The database
 │   ├── raw/                       
 │   ├── processed/                  
 │   └── enriched/                   
@@ -122,7 +122,7 @@ All contributions will go through a review process:
 2. **Technical Review**: For code contributions
 3. **Scientific Review**: For data and methodology contributions
 4. **Revision**: Addressing reviewer feedback
-5. **Acceptance**: Merging into the main dataset
+5. **Acceptance**: Merging into the main database
 
 ## Code of Conduct
 
@@ -152,7 +152,7 @@ Project maintainers are responsible for clarifying the standards of acceptable b
 
 ## Recognition
 
-All contributors will be recognized in the project documentation. Significant contributions may be highlighted in publications or presentations about the dataset.
+All contributors will be recognized in the project documentation. Significant contributions may be highlighted in publications or presentations about the database.
 
 ## Questions?
 

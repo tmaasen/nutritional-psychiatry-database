@@ -1,8 +1,8 @@
-# AI Methodology for Nutritional Psychiatry Dataset Enrichment
+# AI Methodology for Nutritional Psychiatry Database Enrichment
 
 ## 1. Introduction
 
-This document outlines the artificial intelligence methodology used to enrich the Nutritional Psychiatry Dataset. The AI enrichment process addresses key data gaps in traditional food databases by predicting brain-specific nutrients, bioactive compounds, and mental health impacts based on scientific literature and established nutritional principles.
+This document outlines the artificial intelligence methodology used to enrich the Nutritional Psychiatry Database. The AI enrichment process addresses key data gaps in traditional food databases by predicting brain-specific nutrients, bioactive compounds, and mental health impacts based on scientific literature and established nutritional principles.
 
 ## 2. AI Enrichment Purpose and Rationale
 
@@ -227,7 +227,7 @@ The confidence calibration system ensures accuracy of confidence ratings:
    - Nutrient-specific accuracy patterns
    - Food category-specific patterns
    - Overall model tendencies (e.g., overconfidence correction)
-4. Global calibration factors are applied to the entire dataset
+4. Global calibration factors are applied to the entire database
 
 ### 7.2 Known-Answer Testing
 
@@ -253,19 +253,19 @@ Comprehensive validation rules ensure scientific validity:
 
 ## 8. Implementation Guidelines
 
-### 8.1 Full Pipeline Integration
+### 8.1 Database Integration
 
-The AI implementation is designed to integrate with the larger data pipeline:
+The AI implementation is designed to integrate with the PostgreSQL database:
 
-1. **Preprocessing**: Format USDA and OpenFoodFacts data consistently
+1. **Data retrieval**: Query foods from database that need enrichment
 2. **Gap analysis**: Automatically identify missing nutrients for each food
 3. **Enrichment**: Apply appropriate AI model based on food type and missing data
-4. **Post-processing**: Validate and calibrate all AI-generated content
-5. **Metadata**: Tag all AI-generated data with confidence ratings and generation method
+4. **Storage**: Save AI-generated data back to database with appropriate metadata
+5. **Validation**: Record validation results in the database for quality tracking
 
 ### 8.2 Food Selection Strategy
 
-The food selection strategy prioritizes:
+The food selection strategy uses database queries to prioritize:
 
 1. **Nutritional psychiatry relevance**: Foods with strong brain health connections
 2. **Data gap significance**: Foods with missing brain-specific nutrients
@@ -306,14 +306,14 @@ The methodology follows strict ethical guidelines:
 
 ### 9.3 Appropriate Use Context
 
-The enriched dataset is intended for:
+The enriched database is intended for:
 
 1. Research and education in nutritional psychiatry
 2. Generation of testable hypotheses for future research
 3. Public education on nutrition and mental health
 4. Supporting holistic health approaches
 
-The dataset is **not** intended for:
+The database is **not** intended for:
 1. Medical diagnosis or treatment planning
 2. Replacement of personalized medical or nutrition advice
 3. Making definitive claims about individual foods causing specific mental health effects

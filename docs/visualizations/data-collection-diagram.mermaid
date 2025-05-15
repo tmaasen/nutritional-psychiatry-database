@@ -6,16 +6,13 @@ flowchart TD
     MAN[Manual Entry]
     
     %% Collection Scripts
-    USDA_SCRIPT[usda-api.py]
-    OFF_SCRIPT[openfoodfacts-api.py]
-    LIT_SCRIPT[literature-extract.py]
+    USDA_SCRIPT[usda_api.py]
+    OFF_SCRIPT[openfoodfacts_api.py]
+    LIT_SCRIPT[literature_extract.py]
     MAN_SCRIPT[manual-entry-tool]
     
-    %% Raw Data
-    RAW_USDA[raw/usda_foods/*.json]
-    RAW_OFF[raw/openfoodfacts/*.json]
-    RAW_LIT[raw/literature/*.json]
-    RAW_MAN[raw/manual_entries/*.json]
+    %% Database
+    DB[(PostgreSQL Database)]
     
     %% Connections
     USDA --> USDA_SCRIPT
@@ -23,16 +20,16 @@ flowchart TD
     LIT --> LIT_SCRIPT
     MAN --> MAN_SCRIPT
     
-    USDA_SCRIPT --> RAW_USDA
-    OFF_SCRIPT --> RAW_OFF
-    LIT_SCRIPT --> RAW_LIT
-    MAN_SCRIPT --> RAW_MAN
+    USDA_SCRIPT --> DB
+    OFF_SCRIPT --> DB
+    LIT_SCRIPT --> DB
+    MAN_SCRIPT --> DB
     
     %% Styling
     classDef sources fill:#e6f3ff,stroke:#333,stroke-width:2px
     classDef scripts fill:#fff2cc,stroke:#333,stroke-width:2px
-    classDef data fill:#d5e8d4,stroke:#333,stroke-width:2px
+    classDef database fill:#d5e8d4,stroke:#333,stroke-width:2px
     
     class USDA,OFF,LIT,MAN sources
     class USDA_SCRIPT,OFF_SCRIPT,LIT_SCRIPT,MAN_SCRIPT scripts
-    class RAW_USDA,RAW_OFF,RAW_LIT,RAW_MAN data
+    class DB database

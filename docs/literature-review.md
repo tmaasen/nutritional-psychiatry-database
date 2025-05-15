@@ -2,7 +2,7 @@
 
 ## 1. Introduction
 
-Nutritional psychiatry is an emerging field that examines the relationship between diet and mental health. This scientific domain investigates how nutrients, dietary patterns, and food choices influence brain function, mood regulation, and psychological well-being. This literature review synthesizes the current evidence supporting the connection between nutrition and mental health, providing a scientific foundation for the Nutritional Psychiatry Dataset.
+Nutritional psychiatry is an emerging field that examines the relationship between diet and mental health. This scientific domain investigates how nutrients, dietary patterns, and food choices influence brain function, mood regulation, and psychological well-being. This literature review synthesizes the current evidence supporting the connection between nutrition and mental health, providing a scientific foundation for the Nutritional Psychiatry Database.
 
 ## 2. Key Research Foundations
 

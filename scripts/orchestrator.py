@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Nutritional Psychiatry Dataset Orchestrator
+Nutritional Psychiatry Database Orchestrator
 
-This script orchestrates the end-to-end process of building the Nutritional Psychiatry Dataset:
+This script orchestrates the end-to-end process of building the Nutritional Psychiatry Database:
 1. Data Collection (USDA, OpenFoodFacts, Literature)
 2. Data Transformation
 3. AI Enrichment
@@ -45,8 +45,8 @@ from config import get_config
 # Initialize logger
 logger = setup_logging(__name__)
 
-class DatasetOrchestrator:
-    """Orchestrates the end-to-end process of building the Nutritional Psychiatry Dataset."""
+class DatabaseOrchestrator:
+    """Orchestrates the end-to-end process of building the Nutritional Psychiatry Database."""
     
     def __init__(
         self,
@@ -489,9 +489,9 @@ class DatasetOrchestrator:
         step_name = "confidence_calibration"
         
         def execute() -> Dict:
-            # Use the ConfidenceCalibrationSystem to calibrate the dataset
+            # Use the ConfidenceCalibrationSystem to calibrate the database
             try:
-                stats = self.calibrator.calibrate_dataset()
+                stats = self.calibrator.calibrate_database()
                 logger.info(f"Confidence calibration complete: {stats['successfully_calibrated']} succeeded, {stats['failed']} failed")
                 return stats
                 
@@ -542,7 +542,7 @@ class DatasetOrchestrator:
     
     def run_interactive(self):
         """Run the pipeline interactively."""
-        print("\nNutritional Psychiatry Dataset Pipeline")
+        print("\nNutritional Psychiatry Database Pipeline")
         print("=====================================")
         
         while True:
@@ -587,7 +587,7 @@ def main():
     """Main function."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Nutritional Psychiatry Dataset Pipeline")
+    parser = argparse.ArgumentParser(description="Nutritional Psychiatry Database Pipeline")
     parser.add_argument("--config", help="Path to configuration file")
     parser.add_argument("--foods", nargs="+", help="List of foods to process")
     parser.add_argument("--skip", nargs="+", help="Steps to skip")
@@ -601,7 +601,7 @@ def main():
     args = parser.parse_args()
     
     try:
-        orchestrator = DatasetOrchestrator(
+        orchestrator = DatabaseOrchestrator(
             config_file=args.config,
             food_list=args.foods,
             skip_steps=args.skip,

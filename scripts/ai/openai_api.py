@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OpenAI API for Nutritional Psychiatry Dataset
+OpenAI API for Nutritional Psychiatry Database
 
 This module handles all interactions with the OpenAI API for data enrichment:
 - Brain-specific nutrient prediction

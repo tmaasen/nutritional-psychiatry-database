@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database utilities for the Nutritional Psychiatry Dataset project.
+Database utilities for the Nutritional Psychiatry Database project.
 
 This module provides utilities for database connection management, query execution,
 and data import/export operations.

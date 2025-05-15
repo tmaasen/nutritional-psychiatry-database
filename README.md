@@ -1,10 +1,10 @@
-# Nutritional Psychiatry Dataset
+# Nutritional Psychiatry Database
 
-A comprehensive open-source dataset connecting food nutrients to mental health impacts, designed to bridge the gap between nutrition science and mental wellness applications.
+A comprehensive database connecting food composition to mental health outcomes.
 
 ## Overview
 
-This project aims to create the first comprehensive, open-source dataset that connects food composition to mental health impacts based on nutritional psychiatry research. By enhancing standard food data with brain-specific nutrients and evidence-based mental health relationships, we're building a foundation for research and applications at the intersection of nutrition and mental wellness.
+The Nutritional Psychiatry Database integrates data from USDA, OpenFoodFacts, and scientific literature with AI-enriched predictions to create a unique resource mapping the relationship between nutrition and mental health.
 
 [Data Collection & Processing Methodology](/docs/methodology.md)
 
@@ -13,6 +13,14 @@ This project aims to create the first comprehensive, open-source dataset that co
 [Data Dictionary](/docs/data-dictionary.md)
 
 [Literature Review Methodology](/docs/literature-review.md)
+
+## Key Features
+
+- **Brain-specific nutrients**: Tryptophan, omega-3 fatty acids, B vitamins, etc.
+- **Bioactive compounds**: Polyphenols, flavonoids, anthocyanins, etc.
+- **Mental health impacts**: Evidence-based connections between foods and mental wellness
+- **Nutrient interactions**: Synergistic and antagonistic relationships between nutrients
+- **Confidence ratings**: Calibrated uncertainty representation for all predictions
 
 ### The Problem
 
@@ -24,15 +32,15 @@ Current food databases like USDA FoodData Central provide excellent general nutr
 
 ### Our Approach
 
-We're building a dataset that:
+We're building a database that:
 - Starts with trusted USDA data as a foundation
 - Enriches it with brain-specific nutrients often missing from standard databases
 - Adds research-backed mood impact relationships with confidence ratings
 - Includes comprehensive metadata for transparency and quality tracking
 
-## Dataset Schema
+## Schema
 
-The dataset follows a comprehensive schema that includes:
+The data follows a comprehensive schema that includes:
 
 ### Basic Food Information
 - Unique identifier
@@ -84,23 +92,15 @@ Please see [project-structure.md](/project-structure.md)
 
 ## Data Sources
 
-The dataset is built from multiple sources:
+The database is built from multiple sources:
 
 1. **USDA FoodData Central**: Provides the foundation of standard nutrient data
-2. **Published Research Literature**: Source for specific brain-nutrient connections and mental health impacts
-3. **AI-Assisted Generation**: For filling gaps in data where direct measurements aren't available
-4. **Expert Validation**: For quality control and confidence rating
+2. **Open Food Facts**: Open-source database that contains many data points on food items that FoodDataCentral does not contain.
+3. **Published Research Literature**: Source for specific brain-nutrient connections and mental health impacts
+4. **AI-Assisted Generation**: For filling gaps in data where direct measurements aren't available
+5. **Expert Validation**: For quality control and confidence rating
 
 All data includes source tracking and confidence ratings.
-
-## Current Status
-
-This project is in the early development phase. We are currently:
-
-1. Developing the data collection pipeline
-2. Defining comprehensive schemas
-3. Building the initial proof of concept with 25-50 foods
-4. Creating AI-assisted enrichment processes
 
 ## Getting Started
 
@@ -115,40 +115,48 @@ This project is in the early development phase. We are currently:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nutritional-psychiatry-dataset.git
-cd nutritional-psychiatry-dataset
+git clone https://github.com/tmaasen/nutritional-psychiatry-database.git
+cd nutritional-psychiatry-database
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Set environment variables
-export USDA_API_KEY=your_api_key
-export OPENAI_API_KEY=your_openai_key  # Only needed for AI enrichment
+# Set environment variables in a .env file
+USDA_API_KEY=your_api_key
+OPENAI_API_KEY=your_openai_key
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=nutritional_psychiatry
+DB_USER=your_username
+DB_PASSWORD=your_password
+DB_SSLMODE=require
+
+AI_MODEL=gpt-4o-mini
+AI_TEMPERATURE=0.2
+AI_MAX_TOKENS=2000   
 ```
 
 ### Usage
 
-#### Collecting USDA Data
+### Running the Pipeline
+
+Use the orchestrator script to run the full pipeline or specific steps:
 
 ```bash
-python scripts/data_collection/usda-api.py
-```
+# Run interactively
+python scripts/orchestrator.py --interactive
 
-#### Transforming to Our Schema
+# Process specific foods
+python scripts/orchestrator.py --foods "blueberries raw" "salmon atlantic raw"
 
-```bash
-python scripts/data_processing/transform.py
-```
-
-#### Enriching with AI
-
-```bash
-python scripts/data_processing/enrichment.py --limit 5  # Process 5 foods
+# Run specific steps only
+python scripts/orchestrator.py --only "usda_data_collection" "data_transformation"
 ```
 
 ## Roadmap
 
-1. **Phase 1: Data Collection & Foundation** (Current)
+1. **Phase 1: Data Collection & Foundation**
    - Establish USDA data as base
    - Define schema for brain-specific nutrients
    - Create data pipeline structure
@@ -164,7 +172,6 @@ python scripts/data_processing/enrichment.py --limit 5  # Process 5 foods
    - Prepare for expert review
 
 4. **Phase 4: Public Release & Expansion**
-   - Release V1.0 dataset
    - Expand coverage to more foods
    - Incorporate community contributions
 
@@ -231,7 +238,7 @@ flowchart TD
     class PASS,ADJUST,REJECT output
 ```
 
-This dataset is being developed with scientific rigor in mind:
+This database is being developed with scientific rigor in mind:
 
 - All AI-generated data is clearly marked and confidence-scored
 - Literature-based connections include citations to research
@@ -244,7 +251,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- USDA FoodData Central for the foundation nutritional data
+- USDA FoodData Central and OpenFoodFacts for the foundation nutritional data
 - Researchers advancing the field of nutritional psychiatry
 - Contributors and advisors to this project
 
@@ -254,4 +261,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Note:** This dataset is intended for research and educational purposes. It should not be used as the sole basis for medical decisions. Always consult healthcare professionals for medical advice.
+**Note:** This database is intended for research and educational purposes. It should not be used as the sole basis for medical decisions. Always consult healthcare professionals for medical advice.

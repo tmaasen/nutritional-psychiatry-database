@@ -1,6 +1,6 @@
 # utils/api_utils.py
 """
-API request utilities for the Nutritional Psychiatry Dataset project.
+API request utilities for the Nutritional Psychiatry Database project.
 """
 
 import time

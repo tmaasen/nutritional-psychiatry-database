@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Literature Extraction Script for Nutritional Psychiatry Dataset
+Literature Extraction Script for Nutritional Psychiatry Database
 
 This script extracts structured data from scientific literature on nutritional psychiatry,
 focusing on food-mood relationships, mechanisms, and evidence quality.

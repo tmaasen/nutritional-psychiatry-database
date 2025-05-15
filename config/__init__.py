@@ -1,6 +1,6 @@
 # config/__init__.py
 """
-Centralized configuration management for the Nutritional Psychiatry Dataset project.
+Centralized configuration management for the Nutritional Psychiatry Database project.
 This module handles loading of environment variables, configuration files, and 
 provides a unified interface for accessing configuration values throughout the application.
 """

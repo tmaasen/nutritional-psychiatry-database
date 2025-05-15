@@ -1,10 +1,10 @@
-# Nutritional Psychiatry Dataset: Methodology
+# Nutritional Psychiatry Database: Methodology
 
-This document outlines the comprehensive methodology used to create the Nutritional Psychiatry Dataset. We aim for full transparency in our approaches to ensure scientific validity and reproducibility.
+This document outlines the comprehensive methodology used to create the Nutritional Psychiatry Database. We aim for full transparency in our approaches to ensure scientific validity and reproducibility.
 
 ## Overview
 
-The Nutritional Psychiatry Dataset combines data from multiple sources using a multi-phase approach:
+The Nutritional Psychiatry Database combines data from multiple sources using a multi-phase approach:
 
 1. **Foundation Data Collection**: USDA nutritional data as the base
 2. **Schema Mapping & Transformation**: Converting to our comprehensive schema
@@ -36,25 +36,25 @@ The field increasingly recognizes that nutrient effects are context-dependent. O
 
 ## Data Sources
 
-## Multi-Source Data Integration Approach
+## Multi-Source Data Integration Approach with PostgreSQL
 
-Our enhanced methodology incorporates multiple authoritative data sources with intelligent prioritization:
+Our enhanced methodology integrates multiple authoritative data sources within a PostgreSQL database:
 
-### OpenFoodFacts Integration
-We now incorporate OpenFoodFacts as a complementary data source to address gaps in USDA data, particularly for:
-- International foods not well-represented in USDA
-- Brain-specific nutrients often missing from standard databases
-- Processing level information (NOVA classification)
-- Additional bioactive compounds
+### Database-Driven Data Integration
+We now store all food data in a centralized PostgreSQL database with:
+- Unique food_id identifiers with source prefixes (usda_, off_, lit_)
+- JSON storage for flexible schema evolution
+- Indexing for efficient querying
+- Transaction support for data integrity
 
 ### Source Prioritization Strategy
-For each food entry, data is merged from multiple sources using a confidence-based prioritization system:
+For each food entry, data is merged from multiple sources using a confidence-based prioritization system stored in the database:
 1. **Standard Nutrients**: USDA > OpenFoodFacts > Literature > AI-generated
 2. **Brain Nutrients**: Literature > USDA > OpenFoodFacts > AI-generated
 3. **Bioactive Compounds**: Literature > OpenFoodFacts > USDA > AI-generated
 4. **Mental Health Impacts**: Literature > AI-generated
 
-This hierarchical approach ensures we use the most reliable source for each data component.
+This hierarchical approach ensures we use the most reliable source for each data component while maintaining all data in a single database record.
 
 ### USDA FoodData Central
 

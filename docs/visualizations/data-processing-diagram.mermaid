@@ -1,20 +1,20 @@
 flowchart LR
-    %% Input Data
-    RAW[Raw Data\nMultiple Sources]
+    %% Database Sources
+    DB[(PostgreSQL DB)]
     
     %% Processing Steps
     TRANSFORM[transform.py\nSchema Conversion]
     GAP[Gap Analysis\nIdentify Missing Data]
     VALIDATE[validation.py\nInitial Validation]
     
-    %% Output Data
-    PROCESSED[processed/base_foods/*.json\nBase Schema Format]
+    %% Return to Database
+    DB_PROCESSED[(Processed\nData in DB)]
     
     %% Flow
-    RAW --> TRANSFORM
+    DB --> TRANSFORM
     TRANSFORM --> VALIDATE
-    VALIDATE --> PROCESSED
-    PROCESSED --> GAP
+    VALIDATE --> DB_PROCESSED
+    DB_PROCESSED --> GAP
     
     %% Gap Analysis Details
     subgraph "Gap Analysis Process"
@@ -28,12 +28,11 @@ flowchart LR
     GAP --> IMPACT_GAP
     
     %% Styling
-    classDef input fill:#e6f3ff,stroke:#333,stroke-width:2px
+    classDef database fill:#e6f3ff,stroke:#333,stroke-width:2px
     classDef process fill:#fff2cc,stroke:#333,stroke-width:2px
     classDef output fill:#d5e8d4,stroke:#333,stroke-width:2px
     classDef gap fill:#ffe6cc,stroke:#333,stroke-width:2px
     
-    class RAW input
+    class DB,DB_PROCESSED database
     class TRANSFORM,VALIDATE,GAP process
-    class PROCESSED output
     class BRAIN_GAP,BIO_GAP,IMPACT_GAP gap
