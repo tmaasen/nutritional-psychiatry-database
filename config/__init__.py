@@ -16,12 +16,11 @@ class Config:
     """Centralized configuration management."""
     
     def __init__(self):
+        # Initialize config_data
+        self.config_data = {}
+
         load_dotenv()
-        
-        # Initialize directory structure
-        self.data_dir = get_env("DATA_DIR", "data")
-        # self.dirs = get_project_dirs(self.data_dir)
-        
+         
         # API keys with fallbacks
         self.api_keys = {
             "USDA_API_KEY": get_env("USDA_API_KEY"),
@@ -52,11 +51,12 @@ class Config:
         
         # Literature sources (from config file)
         self.literature_sources = self.config_data.get("literature_sources", [])
-        
-        # Additional settings
-        self.continue_on_failure = self._parse_bool(
-            get_env("CONTINUE_ON_FAILURE", str(self.config_data.get("continue_on_failure", False)))
-        )
+    
+    def _parse_bool(self, value):
+        """Parse string to boolean."""
+        if isinstance(value, bool):
+            return value
+        return value.lower() in ('true', 'yes', '1', 't', 'y')
     
     def get_api_key(self, service: str) -> Optional[str]:
         """
@@ -109,18 +109,6 @@ class Config:
         
         return value
     
-    def get_directory(self, name: str) -> str:
-        """
-        Get path to a specific project directory.
-        
-        Args:
-            name: Directory name from the predefined project structure
-            
-        Returns:
-            Full path to the directory
-        """
-        return self.dirs.get(name, "")
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
@@ -128,21 +116,15 @@ class Config:
             "api_config": self.api_config,
             "ai_settings": self.ai_settings,
             "processing": self.processing,
-            "dirs": self.dirs,
             "literature_sources": self.literature_sources,
-            "continue_on_failure": self.continue_on_failure
         }
-
-
-# Create a default configuration instance
-default_config = Config()
 
 def get_config(config_file: Optional[str] = None) -> Config:
     if config_file:
         return Config(config_file)
     return default_config
 
-def load_dotenv(env_file: str = ".env") -> None:
+def load_dotenv(env_file: str = ".env.development") -> None:
     """
     Load environment variables from .env file.
     """
@@ -164,3 +146,6 @@ def load_dotenv(env_file: str = ".env") -> None:
 
 def get_env(key: str, default: Any = None) -> Any:
     return os.environ.get(key, default)
+
+# Create a default configuration instance
+default_config = Config()

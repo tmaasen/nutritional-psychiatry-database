@@ -23,8 +23,9 @@ from utils.db_utils import PostgresClient
 from utils.data_utils import calculate_completeness
 
 # Import constants
-from constants.food_data_constants import (
-    BRAIN_NUTRIENTS_TO_PREDICT, SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
+from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT
+from constants.literature_constants import (
+    SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
 )
 
 # Initialize logger

@@ -40,17 +40,10 @@ class ConfidenceCalibrationSystem:
     def __init__(
         self,
         db_client: Optional[PostgresClient] = None,
-        evaluation_dir: Optional[str] = None,
         batch_size: int = 100,
         dry_run: bool = False
     ):
         self.db_client = db_client or PostgresClient()
-        
-        config = get_config()
-        self.evaluation_dir = evaluation_dir or config.get_directory("evaluation")
-        if not self.evaluation_dir:
-            self.evaluation_dir = os.path.join(config.data_dir, "evaluation")
-        
         self.batch_size = batch_size
         self.dry_run = dry_run
         
@@ -58,13 +51,12 @@ class ConfidenceCalibrationSystem:
         self.calibration_model = self._load_calibration_model()
         
         logger.info(f"Initialized Confidence Calibration System")
-        logger.info(f"Using evaluation data from: {self.evaluation_dir}")
         if dry_run:
             logger.info("DRY RUN MODE: No changes will be saved to database")
     
     def _load_calibration_model(self) -> Dict:
         """
-        Load evaluation metrics to build calibration model.
+        Load evaluation metrics from database to build calibration model.
         
         Returns:
             Dictionary with calibration parameters by nutrient and food category
@@ -77,25 +69,29 @@ class ConfidenceCalibrationSystem:
             }
         }
         
-        # Find most recent evaluation summary
         try:
-            summary_files = glob.glob(os.path.join(self.evaluation_dir, "evaluation_summary_*.json"))
-            if not summary_files:
-                logger.warning("No evaluation summary files found. Using default calibration model.")
+            # Find the most recent evaluation metrics in the database
+            query = """
+            SELECT metrics_data 
+            FROM evaluation_metrics 
+            WHERE metrics_type = 'nutrients' 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+            """
+            
+            results = self.db_client.execute_query(query)
+            
+            if not results:
+                logger.warning("No evaluation metrics found in database. Using default calibration model.")
                 return model
             
-            # Sort by modification time (most recent first)
-            summary_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-            summary_file = summary_files[0]
+            summary = results[0]["metrics_data"]
             
-            with open(summary_file, 'r') as f:
-                summary = json.load(f)
-            
-            logger.info(f"Loaded evaluation summary from {summary_file}")
+            logger.info(f"Loaded evaluation metrics from database")
             
             # Extract nutrient-specific calibration factors
-            if "nutrients" in summary and "nutrient_types_by_accuracy" in summary["nutrients"]:
-                for nutrient, metrics in summary["nutrients"]["nutrient_types_by_accuracy"].items():
+            if "nutrient_types_by_accuracy" in summary:
+                for nutrient, metrics in summary["nutrient_types_by_accuracy"].items():
                     accuracy = metrics.get("accuracy_within_25_percent", 0)
                     mean_error = metrics.get("mean_error_percent", 0)
                     
@@ -116,9 +112,9 @@ class ConfidenceCalibrationSystem:
                     model["global"]["nutrient_adjustments"][nutrient] = adjustment
             
             # Calculate overall confidence adjustment
-            if "nutrients" in summary and "mean_absolute_percentage_error" in summary["nutrients"]:
-                mape = summary["nutrients"]["mean_absolute_percentage_error"]
-                confidence_error = summary["nutrients"].get("confidence_calibration_error", 0)
+            if "mean_absolute_percentage_error" in summary:
+                mape = summary["mean_absolute_percentage_error"]
+                confidence_error = summary.get("confidence_calibration_error", 0)
                 
                 # If AI is generally overconfident (common issue), reduce confidence
                 if confidence_error > 2:
@@ -132,7 +128,7 @@ class ConfidenceCalibrationSystem:
             logger.info(f"Global confidence adjustment: {model['global']['overall_confidence_adjustment']}")
             
         except Exception as e:
-            logger.error(f"Error loading evaluation summary: {e}", exc_info=True)
+            logger.error(f"Error loading evaluation metrics from database: {e}", exc_info=True)
             # Continue with default model
         
         return model

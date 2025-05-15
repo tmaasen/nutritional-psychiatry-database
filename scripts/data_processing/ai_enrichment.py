@@ -14,11 +14,7 @@ from schema.food_data import BioactiveCompounds, BrainNutrients, DataQuality, Fo
 
 # Import utilities
 from utils.db_utils import PostgresClient
-from utils.nutrient_utils import (
-    parse_nutrient_predictions,
-    parse_bioactive_predictions,
-    parse_mental_health_impacts
-)
+from utils.nutrient_utils import NutrientUtils
 from scripts.ai.openai_api import OpenAIAPI
 from utils.logging_utils import setup_logging
 from config import get_config
@@ -68,7 +64,7 @@ class AIEnrichmentEngine:
                 target_nutrients=missing_nutrients
             )
             
-            parsed_predictions = parse_nutrient_predictions(predicted_nutrients)
+            parsed_predictions = NutrientUtils.parse_nutrient_predictions(predicted_nutrients)
             
             if 'brain_nutrients' not in enriched_data:
                 enriched_data.brain_nutrients = BrainNutrients()
@@ -128,7 +124,7 @@ class AIEnrichmentEngine:
                 standard_nutrients=standard_nutrients
             )
             
-            parsed_compounds = parse_bioactive_predictions(predicted_compounds)
+            parsed_compounds = NutrientUtils.parse_bioactive_predictions(predicted_compounds)
             
             if 'bioactive_compounds' not in enriched_data:
                 enriched_data.bioactive_compounds = BioactiveCompounds()
@@ -172,7 +168,7 @@ class AIEnrichmentEngine:
                 bioactive_compounds=bioactive_compounds
             )
             
-            parsed_impacts = parse_mental_health_impacts(predicted_impacts)
+            parsed_impacts = NutrientUtils.parse_mental_health_impacts(predicted_impacts)
             
             enriched_data.mental_health_impacts = parsed_impacts
             

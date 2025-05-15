@@ -63,7 +63,6 @@ class DatabaseOrchestrator:
         # Override config with arguments if provided
         self.api_keys = self.config.api_keys or {}
         self.food_list = food_list or []
-        self.output_dir = output_dir or self.config.data_dir
         self.skip_steps = skip_steps or []
         self.only_steps = only_steps
         self.batch_size = batch_size or self.config.processing.get("batch_size", 10)
@@ -87,7 +86,6 @@ class DatabaseOrchestrator:
         # Initialize processors
         self.transformer = FoodDataTransformer()
         self.enricher = AIEnrichmentEngine(
-            api_key=openai_api_key,
             db_client=self.db_client
         )
         self.validator = SchemaValidator()

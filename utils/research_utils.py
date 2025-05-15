@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 from utils.logging_utils import setup_logging
 from utils.document_utils import StudyMetadata
 from utils.nutrient_utils import NutrientNameNormalizer
-from constants.food_data_constants import (
+from constants.literature_constants import (
     NUTRIENT_KEYWORDS, MENTAL_HEALTH_KEYWORDS, FOOD_SOURCES, 
     DIRECTION_KEYWORDS, EVIDENCE_HIERARCHY, EVIDENCE_ADJUSTMENT_FACTORS,
     STUDY_TYPE_KEYWORDS, MECHANISM_INDICATORS, MECHANISM_EXTRACT_LENGTH
