@@ -26,7 +26,7 @@ logger = setup_logging(__name__)
 class LiteratureExtractor:
     """Extracts structured data from scientific literature for nutritional psychiatry."""
     
-    def __init__(self, db_client: PostgresClient = None):
+    def __init__(self, db_client: Optional[PostgresClient] = None):
         self.config = get_config()        
         self.db_client = db_client or PostgresClient()
         

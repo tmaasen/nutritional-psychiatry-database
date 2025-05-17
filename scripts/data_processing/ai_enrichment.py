@@ -28,12 +28,14 @@ class AIEnrichmentEngine:
     def __init__(self, model: str = None, db_client: Optional[PostgresClient] = None):
         config = get_config()
         
-        self.db_client = db_client or PostgresClient()        
+        # Use provided DB client or create a new one
+        self.db_client = db_client or PostgresClient()
+        
         self.api_key = config.get_api_key("OPENAI")
         self.model = model or config.get_value("ai_settings.model", "gpt-4o-mini")
-        self.openai_client = OpenAIAPI(api_key=self.api_key)
-        
-        logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
+        self.openai_client = OpenAIAPI(api_key=self.api_key, db_client=self.db_client)
+    
+    logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
     
     def _get_attrs_dict(self, obj, exclude_nested=True):
         """Helper to convert object attributes to dictionary."""

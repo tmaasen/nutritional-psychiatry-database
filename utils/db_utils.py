@@ -8,6 +8,7 @@ and data import/export operations.
 
 import json
 import logging
+import time
 from typing import Dict, List, Optional, Union, Tuple, Any
 from contextlib import contextmanager
 from datetime import datetime
@@ -133,6 +134,57 @@ class PostgresClient:
             self.connection_pool.closeall()
             logger.info("Closed connection pool")
     
+    def __enter__(self):
+        """Enable usage with context manager for automatic resource cleanup."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup resources when exiting context manager."""
+        self.close()
+        
+    def is_connected(self):
+        """Check if the database connection is working."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("SELECT 1")
+                return True
+        except Exception as e:
+            logger.error(f"Database connection check failed: {e}")
+            return False
+        
+    def reconnect(self, max_attempts=3, delay=1.0):
+        """Attempt to reconnect to the database."""
+        attempt = 0
+        while attempt < max_attempts:
+            try:
+                logger.info(f"Attempting database reconnection ({attempt+1}/{max_attempts})")
+                # Close existing pool if it exists
+                if hasattr(self, 'connection_pool'):
+                    try:
+                        self.connection_pool.closeall()
+                    except Exception:
+                        pass
+                    
+                # Create a new connection pool
+                self.connection_pool = pool.ThreadedConnectionPool(
+                    1, 10,  # Use same defaults as in __init__
+                    self.connection_string
+                )
+                
+                # Test the connection
+                if self.is_connected():
+                    logger.info("Database reconnection successful")
+                    return True
+                    
+            except Exception as e:
+                logger.error(f"Database reconnection failed: {e}")
+                
+            attempt += 1
+            time.sleep(delay * (2 ** attempt))  # Exponential backoff
+            
+        logger.critical("Failed to reconnect to database after multiple attempts")
+        return False
+
     def execute_query(
         self, 
         query: str, 

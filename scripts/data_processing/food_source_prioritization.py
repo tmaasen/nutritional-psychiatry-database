@@ -5,12 +5,10 @@ Compares and merges data from different sources (USDA, OpenFoodFacts) with intel
 """
 
 import argparse
-import json
 from datetime import datetime
 import sys
 from typing import Dict, List, Optional, Tuple
 
-# Import schema models
 from schema.food_data import (
     CircadianEffects, ContextualFactors, FoodData, NeuralTarget, PopulationVariation, StandardNutrients, BrainNutrients, Omega3, BioactiveCompounds,
     MentalHealthImpact, ResearchSupport, NutrientInteraction, DataQuality,
@@ -23,7 +21,6 @@ from utils.logging_utils import setup_logging
 from utils.db_utils import PostgresClient
 from utils.data_utils import calculate_completeness
 
-# Import constants
 from constants.sql_queries import *
 from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT
 from constants.literature_constants import (

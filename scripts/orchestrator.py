@@ -47,16 +47,16 @@ logger = setup_logging(__name__)
 
 class DatabaseOrchestrator:
     """Orchestrates the end-to-end process of building the Nutritional Psychiatry Database."""
-    
+        
     def __init__(
         self,
         config_file: Optional[str] = None,
         food_list: Optional[List[str]] = None,
-        output_dir: Optional[str] = None,
         skip_steps: Optional[List[str]] = None,
         only_steps: Optional[List[str]] = None,
         batch_size: Optional[int] = None,
-        force_reprocess: Optional[bool] = None
+        force_reprocess: Optional[bool] = None,
+        db_client: Optional[PostgresClient] = None
     ):
         self.config = get_config(config_file)
         
@@ -68,12 +68,18 @@ class DatabaseOrchestrator:
         self.batch_size = batch_size or self.config.processing.get("batch_size", 10)
         self.force_reprocess = force_reprocess if force_reprocess is not None else self.config.processing.get("force_reprocess", False)
         
-        self.db_client = PostgresClient()        
+        # Use provided DB client or create a new one
+        self.db_client = db_client or PostgresClient()
+        # Verify database connection is working
+        if not self.db_client.is_connected():
+            if not self.db_client.reconnect():
+                raise RuntimeError("Failed to establish database connection")
+                
         self.completed_steps: Set[str] = set()
         self._initialize_processors()
     
     def _initialize_processors(self):
-        """Initialize all data processors and API clients."""
+        """Initialize all data processors and API clients with shared DB connection."""
         # Get API keys from config if not provided
         usda_api_key = self.api_keys.get("USDA_API_KEY") or self.config.get_api_key("USDA")
         openai_api_key = self.api_keys.get("OPENAI_API_KEY") or self.config.get_api_key("OPENAI")
@@ -83,7 +89,7 @@ class DatabaseOrchestrator:
         self.off_client = OpenFoodFactsAPI()
         self.literature_client = LiteratureExtractor(db_client=self.db_client)
         
-        # Initialize processors
+        # Initialize processors (pass shared DB client)
         self.transformer = FoodDataTransformer()
         self.enricher = AIEnrichmentEngine(
             db_client=self.db_client
@@ -95,9 +101,16 @@ class DatabaseOrchestrator:
         self.prioritizer = SourcePrioritizer(
             db_client=self.db_client
         )
-        
-        logger.info("All processors and clients initialized successfully")
     
+    def cleanup(self):
+        """Clean up resources when orchestrator is done."""
+        try:
+            if hasattr(self, 'db_client'):
+                self.db_client.close()
+                logger.info("Database connection pool closed")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+
     def _should_run_step(self, step_name: str) -> bool:
         """Determine if a step should be run based on skip_steps and only_steps."""
         if self.only_steps:
@@ -598,26 +611,35 @@ def main():
     
     args = parser.parse_args()
     
+    orchestrator = None
     try:
+        # Create DB client first so we can share it
+        db_client = PostgresClient()
+        
         orchestrator = DatabaseOrchestrator(
             config_file=args.config,
             food_list=args.foods,
             skip_steps=args.skip,
             only_steps=args.only,
             batch_size=args.batch_size,
-            force_reprocess=args.force
+            force_reprocess=args.force,
+            db_client=db_client  # Pass the shared DB client
         )
         
         if args.interactive:
             orchestrator.run_interactive()
         else:
             success = orchestrator.run_all()
-            if not success:
+            if not success and not args.continue_on_failure:
                 sys.exit(1)
     
     except Exception as e:
         logger.error(f"Error running orchestrator: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        # Ensure cleanup happens even if exception occurs
+        if orchestrator:
+            orchestrator.cleanup()
 
 if __name__ == "__main__":
     main()
