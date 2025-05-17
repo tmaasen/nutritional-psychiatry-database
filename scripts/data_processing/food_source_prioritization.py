@@ -5,9 +5,10 @@ Compares and merges data from different sources (USDA, OpenFoodFacts) with intel
 """
 
 import argparse
+import json
 from datetime import datetime
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Import schema models
 from schema.food_data import (
@@ -23,6 +24,7 @@ from utils.db_utils import PostgresClient
 from utils.data_utils import calculate_completeness
 
 # Import constants
+from constants.sql_queries import *
 from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT
 from constants.literature_constants import (
     SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
@@ -80,9 +82,20 @@ class SourcePrioritizer:
         return data_quality.overall_confidence
     
     def merge_food_data(self, food_entries: List[FoodData]) -> FoodData:
+        """
+        Merge multiple food entries into one, prioritizing data sources.
+        
+        This version works with the normalized database schema.
+        
+        Args:
+            food_entries: List of FoodData objects to merge
+            
+        Returns:
+            Merged FoodData object
+        """
         if not food_entries:
             logger.warning("No food entries provided for merging")
-            return {}
+            return FoodData()
         
         # First, validate that all entries represent the same food
         food_names = [entry.name for entry in food_entries]
@@ -119,10 +132,10 @@ class SourcePrioritizer:
         # Update metadata
         merged.metadata = self._create_merged_metadata(merged, food_entries)
         
-        # Update data quality section
-        if "data_quality" not in merged:
-            merged.data_quality = {}
-        merged.data_quality[SOURCE_PRIORITY_FIELD] = source_priority
+        # Update data quality section with source priority
+        if not merged.data_quality:
+            merged.data_quality = DataQuality()
+        merged.data_quality.source_priority = source_priority
         
         # Calculate new completeness score
         merged.data_quality.completeness = calculate_completeness(merged)
@@ -134,8 +147,8 @@ class SourcePrioritizer:
         priority_list = self.default_priorities["standard_nutrients"]
         
         # Initialize if missing
-        if "standard_nutrients" not in merged:
-            merged.standard_nutrients = {}
+        if not merged.standard_nutrients:
+            merged.standard_nutrients = StandardNutrients()
         
         # Track which source was used
         used_source = None
@@ -147,11 +160,9 @@ class SourcePrioritizer:
                 if entry_source != source:
                     continue
                 
-                if "standard_nutrients" in entry and entry["standard_nutrients"]:
+                if entry.standard_nutrients:
                     # Check if this source has better completeness for standard nutrients
-                    if (used_source is None or 
-                        len(entry.standard_nutrients) > len(merged.standard_nutrients)):
-                        
+                    if used_source is None or self._count_non_null_attrs(entry.standard_nutrients) > self._count_non_null_attrs(merged.standard_nutrients):
                         merged.standard_nutrients = entry.standard_nutrients.copy()
                         used_source = entry_source
         
@@ -159,13 +170,22 @@ class SourcePrioritizer:
         if used_source:
             source_priority["standard_nutrients"] = used_source
     
+    def _count_non_null_attrs(self, obj):
+        """Count non-null attributes in an object."""
+        if not obj:
+            return 0
+        return sum(1 for name in dir(obj) 
+                  if not name.startswith('_') and 
+                  not callable(getattr(obj, name)) and 
+                  getattr(obj, name) is not None)
+    
     def _merge_brain_nutrients(self, merged: FoodData, entries: List[FoodData], source_priority: Dict) -> None:
         """Merge brain nutrients with special handling for omega-3 data."""
         priority_list = self.default_priorities["brain_nutrients"]
         
         # Initialize if missing
-        if "brain_nutrients" not in merged:
-            merged.brain_nutrients = {}
+        if not merged.brain_nutrients:
+            merged.brain_nutrients = BrainNutrients()
         
         # Special handling for omega-3
         self._merge_omega3(merged, entries)
@@ -176,6 +196,10 @@ class SourcePrioritizer:
         source_used = {}  # Track which source was used for each nutrient
         
         for nutrient in brain_nutrients:
+            # Skip omega3 which is handled separately
+            if nutrient.startswith("omega3"):
+                continue
+                
             for source in priority_list:
                 for entry in entries:
                     entry_source = identify_source(entry)
@@ -187,11 +211,11 @@ class SourcePrioritizer:
                     if confidence < self.confidence_thresholds.get(entry_source, 0):
                         continue
                     
-                    if ("brain_nutrients" in entry and 
-                        nutrient in entry.brain_nutrients and 
-                        entry.brain_nutrients[nutrient] is not None):
+                    if (entry.brain_nutrients and
+                        hasattr(entry.brain_nutrients, nutrient) and 
+                        getattr(entry.brain_nutrients, nutrient) is not None):
                         
-                        merged.brain_nutrients[nutrient] = entry.brain_nutrients[nutrient]
+                        setattr(merged.brain_nutrients, nutrient, getattr(entry.brain_nutrients, nutrient))
                         source_used[nutrient] = entry_source
                         break  # Found highest priority source for this nutrient
         
@@ -208,11 +232,11 @@ class SourcePrioritizer:
     def _merge_omega3(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Special handling for omega-3 data which needs component-level merging."""
         # Initialize if missing
-        if "brain_nutrients" not in merged:
-            merged.brain_nutrients = {}
+        if not merged.brain_nutrients:
+            merged.brain_nutrients = BrainNutrients()
         
-        if "omega3" not in merged.brain_nutrients:
-            merged.brain_nutrients.omega3 = {}
+        if not merged.brain_nutrients.omega3:
+            merged.brain_nutrients.omega3 = Omega3()
         
         # Components to merge
         components = ["total_g", "epa_mg", "dha_mg", "ala_mg"]
@@ -228,25 +252,26 @@ class SourcePrioritizer:
                         continue
                     
                     # Check if entry has omega3 data for this component
-                    if ("brain_nutrients" in entry and 
-                        "omega3" in entry.brain_nutrients and 
-                        component in entry.brain_nutrients.omega3 and
-                        entry.brain_nutrients.omega3[component] is not None):
+                    if (entry.brain_nutrients and 
+                        entry.brain_nutrients.omega3 and 
+                        hasattr(entry.brain_nutrients.omega3, component) and
+                        getattr(entry.brain_nutrients.omega3, component) is not None):
                         
                         # Check confidence
-                        if "confidence" in entry.brain_nutrients.omega3:
+                        if hasattr(entry.brain_nutrients.omega3, "confidence"):
                             confidence = entry.brain_nutrients.omega3.confidence
                             if confidence < self.confidence_thresholds.get(entry_source, 0):
                                 continue
                         
                         # Use this value
-                        merged.brain_nutrients.omega3[component] = entry.brain_nutrients.omega3[component]
+                        setattr(merged.brain_nutrients.omega3, component, 
+                               getattr(entry.brain_nutrients.omega3, component))
                         break  # Found highest priority source
         
         # Calculate confidence based on completeness
         filled_components = sum(1 for c in components 
-                               if c in merged.brain_nutrients.omega3 and 
-                               merged.brain_nutrients.omega3[c] is not None)
+                               if hasattr(merged.brain_nutrients.omega3, c) and 
+                               getattr(merged.brain_nutrients.omega3, c) is not None)
         
         if filled_components > 0:
             confidence = 5 + min(5, filled_components)  # 5-10 scale based on completeness
@@ -257,8 +282,8 @@ class SourcePrioritizer:
         priority_list = self.default_priorities["bioactive_compounds"]
         
         # Initialize if missing
-        if "bioactive_compounds" not in merged:
-            merged.bioactive_compounds = {}
+        if not merged.bioactive_compounds:
+            merged.bioactive_compounds = BioactiveCompounds()
         
         # Track which source was used
         best_entry = None
@@ -272,15 +297,15 @@ class SourcePrioritizer:
                 if entry_source != source:
                     continue
                 
-                if "bioactive_compounds" in entry and entry.bioactive_compounds:
-                    count = sum(1 for value in entry.bioactive_compounds.values() if value is not None)
+                if entry.bioactive_compounds:
+                    count = self._count_non_null_attrs(entry.bioactive_compounds)
                     if count > best_count:
                         best_entry = entry
                         best_source = entry_source
                         best_count = count
         
         # If we found a better entry, use its bioactive compounds
-        if best_entry and "bioactive_compounds" in best_entry:
+        if best_entry and best_entry.bioactive_compounds:
             merged.bioactive_compounds = best_entry.bioactive_compounds.copy()
             source_priority["bioactive_compounds"] = best_source
     
@@ -289,12 +314,12 @@ class SourcePrioritizer:
         priority_list = self.default_priorities["mental_health_impacts"]
         
         # Initialize if missing
-        if "mental_health_impacts" not in merged:
+        if not merged.mental_health_impacts:
             merged.mental_health_impacts = []
         
         # Used impact types to avoid duplicates
-        used_impact_types = {impact.get("impact_type") for impact in merged.mental_health_impacts 
-                            if "impact_type" in impact}
+        used_impact_types = {impact.impact_type for impact in merged.mental_health_impacts 
+                           if hasattr(impact, "impact_type")}
         
         # Add impacts from all sources, prioritizing by confidence
         all_impacts = []
@@ -306,16 +331,16 @@ class SourcePrioritizer:
                 if entry_source != source:
                     continue
                 
-                if "mental_health_impacts" in entry and entry.mental_health_impacts:
+                if entry.mental_health_impacts:
                     # Add impacts with high enough confidence
                     for impact in entry.mental_health_impacts:
-                        if "impact_type" not in impact or impact["impact_type"] in used_impact_types:
+                        if not hasattr(impact, "impact_type") or impact.impact_type in used_impact_types:
                             continue
                         
-                        confidence = impact.get("confidence", 0)
+                        confidence = impact.confidence if hasattr(impact, "confidence") else 0
                         if confidence >= self.confidence_thresholds.get(entry_source, 0):
                             all_impacts.append(impact)
-                            used_impact_types.add(impact["impact_type"])
+                            used_impact_types.add(impact.impact_type)
                             source_used = entry_source
         
         # Add all collected impacts
@@ -328,117 +353,119 @@ class SourcePrioritizer:
     def _merge_contextual_factors(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Merge contextual factors, combining from all sources."""
         # Initialize if missing
-        if "contextual_factors" not in merged:
-            merged.contextual_factors = ContextualFactors(
-                circadian_effects=CircadianEffects(factors=[]),
-                food_combinations=[],
-                preparation_effects=[]
-            )
+        if not merged.contextual_factors:
+            merged.contextual_factors = ContextualFactors()
         
         # Start with the structure of the first entry that has it
         for entry in entries:
-            if "contextual_factors" in entry and entry.contextual_factors:
+            if entry.contextual_factors:
                 # Use as template if we don't have any
-                if not merged.contextual_factors.circadian_effects.factors:
+                if not merged.contextual_factors.circadian_effects or not merged.contextual_factors.circadian_effects.factors:
                     merged.contextual_factors = entry.contextual_factors.copy()
                     break
         
         # Now combine unique factors from all entries
         for entry in entries:
-            if "contextual_factors" not in entry or not entry["contextual_factors"]:
+            if not entry.contextual_factors:
                 continue
             
             # Merge circadian factors
-            if "circadian_effects" in entry.contextual_factors:
+            if entry.contextual_factors.circadian_effects:
                 # Add description if missing
-                if "description" not in merged.contextual_factors.circadian_effects.description and \
-                   "description" in entry.contextual_factors.circadian_effects:
+                if (not merged.contextual_factors.circadian_effects or 
+                    not merged.contextual_factors.circadian_effects.description) and \
+                   entry.contextual_factors.circadian_effects.description:
+                    if not merged.contextual_factors.circadian_effects:
+                        merged.contextual_factors.circadian_effects = CircadianEffects()
                     merged.contextual_factors.circadian_effects.description = \
                         entry.contextual_factors.circadian_effects.description
                 
                 # Merge factors
-                if "factors" in entry.contextual_factors.circadian_effects:
+                if entry.contextual_factors.circadian_effects.factors:
                     existing_factors = set()
-                    if "factors" in merged.contextual_factors.circadian_effects:
-                        existing_factors = {factor.get("factor") for factor in 
+                    if merged.contextual_factors.circadian_effects and merged.contextual_factors.circadian_effects.factors:
+                        existing_factors = {factor.factor for factor in 
                                            merged.contextual_factors.circadian_effects.factors 
-                                           if "factor" in factor}
+                                           if hasattr(factor, "factor")}
                     
                     # Add new unique factors
                     for factor in entry.contextual_factors.circadian_effects.factors:
-                        if "factor" in factor and factor["factor"] not in existing_factors:
-                            if "factors" not in merged.contextual_factors.circadian_effects:
+                        if hasattr(factor, "factor") and factor.factor not in existing_factors:
+                            if not merged.contextual_factors.circadian_effects:
+                                merged.contextual_factors.circadian_effects = CircadianEffects()
+                            if not merged.contextual_factors.circadian_effects.factors:
                                 merged.contextual_factors.circadian_effects.factors = []
                             merged.contextual_factors.circadian_effects.factors.append(factor)
-                            existing_factors.add(factor["factor"])
+                            existing_factors.add(factor.factor)
             
             # Merge food combinations
-            if "food_combinations" in entry.contextual_factors:
+            if entry.contextual_factors.food_combinations:
                 existing_combinations = set()
-                if "food_combinations" in merged.contextual_factors:
-                    existing_combinations = {combo.get("combination") for combo in 
+                if merged.contextual_factors.food_combinations:
+                    existing_combinations = {combo.combination for combo in 
                                            merged.contextual_factors.food_combinations 
-                                           if "combination" in combo}
+                                           if hasattr(combo, "combination")}
                 
                 # Add new unique combinations
                 for combo in entry.contextual_factors.food_combinations:
-                    if "combination" in combo and combo["combination"] not in existing_combinations:
-                        if "food_combinations" not in merged.contextual_factors:
+                    if hasattr(combo, "combination") and combo.combination not in existing_combinations:
+                        if not merged.contextual_factors.food_combinations:
                             merged.contextual_factors.food_combinations = []
                         merged.contextual_factors.food_combinations.append(combo)
-                        existing_combinations.add(combo["combination"])
+                        existing_combinations.add(combo.combination)
             
             # Merge preparation effects
-            if "preparation_effects" in entry.contextual_factors:
+            if entry.contextual_factors.preparation_effects:
                 existing_methods = set()
-                if "preparation_effects" in merged.contextual_factors:
-                    existing_methods = {method.get("method") for method in 
+                if merged.contextual_factors.preparation_effects:
+                    existing_methods = {method.method for method in 
                                       merged.contextual_factors.preparation_effects 
-                                      if "method" in method}
+                                      if hasattr(method, "method")}
                 
                 # Add new unique methods
                 for method in entry.contextual_factors.preparation_effects:
-                    if "method" in method and method["method"] not in existing_methods:
-                        if "preparation_effects" not in merged.contextual_factors:
+                    if hasattr(method, "method") and method.method not in existing_methods:
+                        if not merged.contextual_factors.preparation_effects:
                             merged.contextual_factors.preparation_effects = []
                         merged.contextual_factors.preparation_effects.append(method)
-                        existing_methods.add(method["method"])
+                        existing_methods.add(method.method)
     
     def _merge_nutrient_interactions(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Merge nutrient interactions, combining from all sources with confidence filtering."""
         # Initialize if missing
-        if "nutrient_interactions" not in merged:
-            merged.nutrient_interactions = NutrientInteraction(interactions=[])
+        if not merged.nutrient_interactions:
+            merged.nutrient_interactions = []
         
         # Track interaction IDs we've already added
-        existing_ids = {interaction.get("interaction_id") for interaction in merged.nutrient_interactions 
-                       if "interaction_id" in interaction}
+        existing_ids = {interaction.interaction_id for interaction in merged.nutrient_interactions 
+                       if hasattr(interaction, "interaction_id")}
         
         # Add interactions from all entries, filtering by confidence
         for entry in entries:
-            if "nutrient_interactions" not in entry or not entry["nutrient_interactions"]:
+            if not entry.nutrient_interactions:
                 continue
             
             for interaction in entry.nutrient_interactions:
-                if "interaction_id" not in interaction:
+                if not hasattr(interaction, "interaction_id"):
                     continue
                 
-                if interaction["interaction_id"] in existing_ids:
+                if interaction.interaction_id in existing_ids:
                     continue
                 
                 # Filter by confidence
-                confidence = interaction.get("confidence", 0)
+                confidence = interaction.confidence if hasattr(interaction, "confidence") else 0
                 entry_source = identify_source(entry)
                 if confidence >= self.confidence_thresholds.get(entry_source, 0):
-                    merged.nutrient_interactions.interactions.append(interaction)
-                    existing_ids.add(interaction["interaction_id"])
+                    merged.nutrient_interactions.append(interaction)
+                    existing_ids.add(interaction.interaction_id)
     
     def _merge_inflammatory_index(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Merge inflammatory index data, selecting the highest confidence source."""
-        priority_list = self.default_priorities["inflammatory_index"]
+        priority_list = self.default_priorities.get("inflammatory_index", 
+                                                 ["literature", "openfoodfacts", "ai_generated"])
         
         # Initialize if missing
-        if "inflammatory_index" not in merged:
+        if not merged.inflammatory_index:
             # Try to find in any entry
             for source in priority_list:
                 for entry in entries:
@@ -446,74 +473,77 @@ class SourcePrioritizer:
                     if entry_source != source:
                         continue
                     
-                    if "inflammatory_index" in entry and entry.inflammatory_index:
+                    if entry.inflammatory_index:
                         merged.inflammatory_index = entry.inflammatory_index.copy()
                         return
     
     def _merge_population_variations(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Merge population variations, combining from all sources."""
         # Initialize if missing
-        if "population_variations" not in merged:
-            merged.population_variations = PopulationVariation()
+        if not merged.population_variations:
+            merged.population_variations = []
         
         # Track populations we've already added
-        existing_populations = {variation.get("population") for variation in merged.population_variations 
-                              if "population" in variation}
+        existing_populations = {variation.population for variation in merged.population_variations 
+                              if hasattr(variation, "population")}
         
         # Add variations from all entries
         for entry in entries:
-            if "population_variations" not in entry or not entry["population_variations"]:
+            if not entry.population_variations:
                 continue
             
             for variation in entry.population_variations:
-                if "population" not in variation:
+                if not hasattr(variation, "population"):
                     continue
                 
-                if variation["population"] in existing_populations:
+                if variation.population in existing_populations:
                     continue
                 
-                merged.population_variations.variations.append(variation)
-                existing_populations.add(variation["population"])
+                merged.population_variations.append(variation)
+                existing_populations.add(variation.population)
     
     def _merge_neural_targets(self, merged: FoodData, entries: List[FoodData]) -> None:
         """Merge neural targets, combining from all sources with confidence filtering."""
         # Initialize if missing
-        if "neural_targets" not in merged:
-            merged.neural_targets = NeuralTarget()
+        if not merged.neural_targets:
+            merged.neural_targets = []
         
         # Track neural pathways we've already added
-        existing_pathways = {target.get("pathway") for target in merged.neural_targets 
-                            if "pathway" in target}
+        existing_pathways = {target.pathway for target in merged.neural_targets 
+                            if hasattr(target, "pathway")}
         
         # Add targets from all entries, filtering by confidence
         for entry in entries:
-            if "neural_targets" not in entry or not entry["neural_targets"]:
+            if not entry.neural_targets:
                 continue
             
             for target in entry.neural_targets:
-                if "pathway" not in target:
+                if not hasattr(target, "pathway"):
                     continue
                 
-                if target["pathway"] in existing_pathways:
+                if target.pathway in existing_pathways:
                     continue
                 
                 # Filter by confidence
-                confidence = target.get("confidence", 0)
-                entry_source = self.identify_source(entry)
+                confidence = target.confidence if hasattr(target, "confidence") else 0
+                entry_source = identify_source(entry)
                 if confidence >= self.confidence_thresholds.get(entry_source, 0):
-                    merged.neural_targets.targets.append(target)
-                    existing_pathways.add(target["pathway"])
+                    merged.neural_targets.append(target)
+                    existing_pathways.add(target.pathway)
     
-    def _create_merged_metadata(self, merged: FoodData, entries: List[FoodData]) -> Dict:
+    def _create_merged_metadata(self, merged: FoodData, entries: List[FoodData]) -> Metadata:
         """Create merged metadata section."""
         # Start with metadata from our base entry
-        if "metadata" in merged:
+        if merged.metadata:
             metadata = merged.metadata.copy()
         else:
             metadata = Metadata(
                 version='0.1.0',
                 created=datetime.now().isoformat(),
                 last_updated=datetime.now().isoformat(),
+                source_urls=[],
+                source_ids={},
+                tags=[]
             )
         
         # Update last_updated
@@ -523,42 +553,51 @@ class SourcePrioritizer:
         all_urls = set(metadata.source_urls)
         
         # Collect source IDs from all entries
-        source_ids = metadata.source_ids
+        source_ids = metadata.source_ids.copy()
         
         # Collect tags from all entries
         all_tags = set(metadata.tags)
         
         for entry in entries:
-            if "metadata" not in entry:
+            if not entry.metadata:
                 continue
             
             entry_metadata = entry.metadata
             
             # Add source URLs
-            if "source_urls" in entry_metadata:
-                all_urls.update(entry_metadata["source_urls"])
+            if entry_metadata.source_urls:
+                all_urls.update(entry_metadata.source_urls)
             
             # Add source IDs
-            if "source_ids" in entry_metadata:
-                for key, value in entry_metadata["source_ids"].items():
+            if entry_metadata.source_ids:
+                for key, value in entry_metadata.source_ids.items():
                     source_ids[key] = value
             
             # Add tags
-            if "tags" in entry_metadata:
-                all_tags.update(entry_metadata["tags"])
+            if entry_metadata.tags:
+                all_tags.update(entry_metadata.tags)
             
             # Keep image URL if available
-            if "image_url" in entry_metadata and "image_url" not in metadata:
-                metadata["image_url"] = entry_metadata["image_url"]
+            if entry_metadata.image_url and not metadata.image_url:
+                metadata.image_url = entry_metadata.image_url
         
         # Update metadata
-        metadata["source_urls"] = list(all_urls)
-        metadata["source_ids"] = source_ids
-        metadata["tags"] = list(all_tags)
+        metadata.source_urls = list(all_urls)
+        metadata.source_ids = source_ids
+        metadata.tags = list(all_tags)
         
         return metadata
     
     def merge_foods_by_name(self, food_name: str) -> Optional[str]:
+        """
+        Find foods with similar names and merge them.
+        
+        Args:
+            food_name: Name to search for
+            
+        Returns:
+            Food ID of the merged food
+        """
         try:
             # Find similar foods in database
             sources = ["usda", "openfoodfacts", "literature", "ai_generated"]
@@ -566,16 +605,18 @@ class SourcePrioritizer:
             
             for source in sources:
                 # Query foods by name and source type
-                query = """
-                    SELECT food_data FROM foods
-                    WHERE name ILIKE %s AND source = %s
-                """
-                params = (f"%{food_name}%", source)
+                food_results = self.db_client.execute_query(
+                    FOOD_GET_BY_NAME_AND_SOURCE, 
+                    (f"%{food_name}%", source)
+                )
                 
-                # Execute query
-                source_foods = self.db_client.execute_query(query, params)
-                if source_foods:
-                    food_entries.extend([food['food_data'] for food in source_foods])
+                if food_results:
+                    for food_result in food_results:
+                        food_id = food_result["food_id"]
+                        # Get the complete food data
+                        food = self.db_client.get_food_by_id(food_id)
+                        if food:
+                            food_entries.append(food)
             
             if not food_entries:
                 logger.warning(f"No foods found matching '{food_name}'")
@@ -584,35 +625,18 @@ class SourcePrioritizer:
             # Merge food entries
             merged_data = self.merge_food_data(food_entries)
             
-            if not merged_data:
+            if not merged_data or not merged_data.food_id:
                 logger.warning(f"Failed to merge data for '{food_name}'")
                 return None
             
-            # Save merged data to database
-            merged_id = merged_data.food_id
+            # Save merged data to database with 'merged' source
+            merged_id = f"merged_{merged_data.food_id}"
+            merged_data.food_id = merged_id
             
-            # Insert into database
-            insert_query = """
-            INSERT INTO foods (food_id, name, source, category, food_data) 
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (food_id) DO UPDATE SET
-                name = EXCLUDED.name,
-                source = EXCLUDED.source,
-                category = EXCLUDED.category,
-                food_data = EXCLUDED.food_data
-            RETURNING food_id
-            """
+            # Save merged food to database
+            saved_id = self.db_client.import_food_from_json(merged_data)
             
-            params = (
-                merged_id,
-                merged_data.name,
-                "merged",
-                merged_data.category,
-                merged_data
-            )
-            
-            result = self.db_client.execute_query(insert_query, params)
-            if result and result[0]["food_id"]:
+            if saved_id:
                 logger.info(f"Successfully merged and saved data for '{food_name}' with ID {merged_id}")
                 return merged_id
             
@@ -635,17 +659,13 @@ class SourcePrioritizer:
         """
         try:
             # Get all distinct food names from database
-            query = """
-            SELECT DISTINCT name FROM foods
-            WHERE source IN ('usda', 'openfoodfacts', 'literature', 'ai_generated')
-            """
+            food_names_results = self.db_client.execute_query(FOOD_GET_DISTINCT_NAMES)
             
-            results = self.db_client.execute_query(query)
-            if not results:
+            if not food_names_results:
                 logger.warning("No foods found in database")
                 return []
             
-            food_names = [result["name"] for result in results]
+            food_names = [result["name"] for result in food_names_results]
             logger.info(f"Found {len(food_names)} distinct food names to merge")
             
             # Process in batches
@@ -703,4 +723,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
