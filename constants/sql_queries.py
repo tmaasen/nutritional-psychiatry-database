@@ -6,13 +6,14 @@
 
 # Insert or update a food record
 FOOD_UPSERT = """
-INSERT INTO foods (food_id, name, description, category, created_at, updated_at)
-VALUES (%s, %s, %s, %s, NOW(), NOW())
+INSERT INTO foods (food_id, name, description, category, processed, validated)
+VALUES (%s, %s, %s, %s, %s, %s)
 ON CONFLICT (food_id) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     category = EXCLUDED.category,
-    updated_at = NOW()
+    processed = EXCLUDED.processed,
+    validated = EXCLUDED.validated
 RETURNING food_id
 """
 
