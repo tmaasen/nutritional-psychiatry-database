@@ -151,8 +151,8 @@ def search_and_import(api_client: USDAFoodDataCentralAPI, db_client: PostgresCli
 def main():
     """Main function to execute the script."""
     parser = argparse.ArgumentParser(description="Fetch and transform USDA FoodData Central data")
-    parser.add_argument("--query", help="Search term", default="blueberries raw")
-    parser.add_argument("--limit", type=int, help="Maximum number of products to import", default=10)
+    parser.add_argument("--query", help="Search term", default="blueberries")
+    parser.add_argument("--limit", type=int, help="Maximum number of products to import", default=5)
     args = parser.parse_args()
     
     try:

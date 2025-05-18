@@ -13,7 +13,7 @@ This module handles all interactions with the OpenAI API for data enrichment:
 import asyncio
 import os
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import openai
 from openai import OpenAI
@@ -29,7 +29,7 @@ from utils.db_utils import PostgresClient
 
 # Import data models
 from schema.food_data import (
-    BrainNutrients, NutrientInteraction, Omega3, BioactiveCompounds, MentalHealthImpact, ResearchSupport
+    BrainNutrients, NutrientInteraction, Omega3, BioactiveCompounds, MentalHealthImpact, ResearchSupport, StandardNutrients
 )
 
 # Constants
@@ -205,24 +205,45 @@ class OpenAIAPI:
         except Exception as e:
             logger.error(f"Failed to save prediction to database: {e}")
             return False
-    
+        
     @log_execution_time
     async def predict_nutrients(
         self, 
         food_name: str, 
         food_category: str, 
-        standard_nutrients: Dict, 
-        existing_brain_nutrients: Dict,
-        target_nutrients: List[str],
+        standard_nutrients: Union[Dict, StandardNutrients], 
+        existing_brain_nutrients: Union[Dict, BrainNutrients, None] = None,
+        target_nutrients: List[str] = [],
         food_id: Optional[str] = None,
         scientific_context: Optional[str] = None,
         reference_foods: Optional[Dict] = None
     ) -> BrainNutrients:
+        """Predict brain-specific nutrients for a food item."""
+        # Convert objects to dictionaries for the template
+        if isinstance(standard_nutrients, StandardNutrients):
+            standard_nutrients_dict = {k: v for k, v in vars(standard_nutrients).items() 
+                                    if not k.startswith('_') and v is not None}
+        else:
+            standard_nutrients_dict = standard_nutrients
+        
+        existing_brain_nutrients_dict = {}
+        if existing_brain_nutrients:
+            if isinstance(existing_brain_nutrients, BrainNutrients):
+                # Extract attributes, handling omega3 specially
+                existing_brain_nutrients_dict = {k: v for k, v in vars(existing_brain_nutrients).items() 
+                                            if not k.startswith('_') and v is not None}
+                if existing_brain_nutrients.omega3:
+                    omega3_dict = {k: v for k, v in vars(existing_brain_nutrients.omega3).items() 
+                                if not k.startswith('_') and v is not None}
+                    existing_brain_nutrients_dict['omega3'] = omega3_dict
+            else:
+                existing_brain_nutrients_dict = existing_brain_nutrients
+        
         variables = {
             "food_name": food_name,
             "food_category": food_category,
-            "standard_nutrients_json": standard_nutrients,
-            "existing_brain_nutrients_json": existing_brain_nutrients,
+            "standard_nutrients_json": standard_nutrients_dict,
+            "existing_brain_nutrients_json": existing_brain_nutrients_dict,
             "target_nutrients_list": ", ".join(target_nutrients),
             "scientific_context": scientific_context,
             "reference_foods_json": reference_foods
@@ -237,11 +258,10 @@ class OpenAIAPI:
             # Parse and validate prediction
             predicted_nutrients = JSONParser.parse_json(response, {})
             
-            # Create BrainNutrients object to validate structure
-            # Note: We can't use full validation here since we only have partial data
-            brain_nutrients_dict = BrainNutrients()
+            # Create BrainNutrients object
+            brain_nutrients = BrainNutrients()
             
-            # Process normal brain nutrients
+            # Process regular brain nutrients
             for nutrient, value in predicted_nutrients.items():
                 if nutrient.startswith("confidence_") or nutrient == "reasoning":
                     continue
@@ -250,45 +270,71 @@ class OpenAIAPI:
                     # Skip omega-3 for separate handling
                     continue
                 
-                brain_nutrients_dict.nutrients[nutrient] = value
+                # Only set if it's an actual attribute of BrainNutrients
+                if hasattr(brain_nutrients, nutrient):
+                    setattr(brain_nutrients, nutrient, value)
             
             # Process omega-3 nutrients if present
-            omega3_dict = {}
+            has_omega3 = False
+            omega3 = Omega3()
+            
+            # Look for total omega-3
             for omega_key in ["omega3_total_g", "omega3.total_g", "total_g"]:
                 if omega_key in predicted_nutrients:
-                    omega3_dict["total_g"] = predicted_nutrients[omega_key]
+                    omega3.total_g = predicted_nutrients[omega_key]
+                    has_omega3 = True
                     break
             
+            # Look for omega-3 components
             for component in ["epa_mg", "dha_mg", "ala_mg"]:
                 omega_key = f"omega3_{component}"
                 alt_key = f"omega3.{component}"
                 
                 if omega_key in predicted_nutrients:
-                    omega3_dict[component] = predicted_nutrients[omega_key]
+                    setattr(omega3, component, predicted_nutrients[omega_key])
+                    has_omega3 = True
                 elif alt_key in predicted_nutrients:
-                    omega3_dict[component] = predicted_nutrients[alt_key]
+                    setattr(omega3, component, predicted_nutrients[alt_key])
+                    has_omega3 = True
             
             # Add confidence if present
             for conf_key in ["confidence_omega3", "omega3_confidence", "confidence_omega3_total_g"]:
                 if conf_key in predicted_nutrients:
-                    omega3_dict["confidence"] = predicted_nutrients[conf_key]
+                    omega3.confidence = predicted_nutrients[conf_key]
                     break
             
             # Add omega3 object if we have data
-            if omega3_dict:
-                brain_nutrients_dict.omega3 = omega3_dict
+            if has_omega3:
+                brain_nutrients.omega3 = omega3
             
             # Save to database if ID provided
             if food_id and self.db_client:
-                await self.save_prediction(food_id, "brain_nutrients", brain_nutrients_dict.to_dict())
+                # Convert to dict for storage - use to_dict() if available
+                if hasattr(brain_nutrients, 'to_dict'):
+                    brain_nutrients_dict = brain_nutrients.to_dict()
+                else:
+                    # Manual conversion as fallback
+                    brain_nutrients_dict = {k: v for k, v in vars(brain_nutrients).items() 
+                                        if not k.startswith('_') and v is not None}
+                    if brain_nutrients.omega3:
+                        omega3_dict = {k: v for k, v in vars(brain_nutrients.omega3).items() 
+                                    if not k.startswith('_') and v is not None}
+                        brain_nutrients_dict["omega3"] = omega3_dict
+                        
+                await self.save_prediction(food_id, "brain_nutrients", brain_nutrients_dict)
             
-            return brain_nutrients_dict
+            return brain_nutrients
             
         except Exception as e:
             logger.error(f"Error parsing nutrient prediction response: {e}")
             logger.error(f"Raw response: {response}")
-            return {"error": str(e), "raw_response": response}
-    
+            # Create an error object for consistent return type
+            error_brain_nutrients = BrainNutrients()
+            # Store error info as attributes
+            setattr(error_brain_nutrients, "_error", str(e))
+            setattr(error_brain_nutrients, "_raw_response", response)
+            return error_brain_nutrients
+
     @log_execution_time
     async def predict_bioactive_compounds(
         self, 

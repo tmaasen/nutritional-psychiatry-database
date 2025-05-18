@@ -35,7 +35,7 @@ class AIEnrichmentEngine:
         self.model = model or config.get_value("ai_settings.model", "gpt-4o-mini")
         self.openai_client = OpenAIAPI(api_key=self.api_key, db_client=self.db_client)
     
-    logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
+        logger.info(f"Initialized AI Enrichment Engine using {self.model} model")
     
     def _get_attrs_dict(self, obj, exclude_nested=True):
         """Helper to convert object attributes to dictionary."""

@@ -119,13 +119,6 @@ class FoodDataTransformer:
         # Extract nutrients
         standard_nutrients = self._extract_usda_standard_nutrients(nutrients)
         brain_nutrients = self._extract_usda_brain_nutrients(nutrients)
-        
-        # Calculate completeness
-        data = {
-            "standard_nutrients": standard_nutrients,
-            "brain_nutrients": brain_nutrients
-        }
-        completeness = calculate_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
 
         transformed = FoodData(
             food_id=food_id,
@@ -142,12 +135,16 @@ class FoodDataTransformer:
             bioactive_compounds={},
             mental_health_impacts=[],
             data_quality=DataQuality(
-                completeness=completeness,
+                completeness=0.0,
                 overall_confidence=DEFAULT_CONFIDENCE_RATINGS.get("usda", 7),
                 brain_nutrients_source="usda_provided"
             ),
             metadata=metadata
         )
+
+        # Calculate completeness
+        completeness = calculate_completeness(transformed, COMPLETENESS_REQUIRED_FIELDS)
+        transformed.data_quality.completeness = completeness
         
         return transformed
     
@@ -339,7 +336,7 @@ class FoodDataTransformer:
                         elif schema_name == "omega3.ala_mg":
                             omega3["ala_mg"] = value
                     else:
-                        brain_nutrients.nutrients[schema_name] = value
+                        setattr(brain_nutrients, schema_name, value)
         
         # Add omega-3 data if available
         if has_omega3:
@@ -387,7 +384,7 @@ class FoodDataTransformer:
                 elif off_name == "selenium_100g":
                     value = NutrientUtils.g_to_mcg(value)
                 
-                brain_nutrients.nutrients[schema_name] = value
+                setattr(brain_nutrients, schema_name, value)
         
         # Extract omega-3 data
         omega3 = {}

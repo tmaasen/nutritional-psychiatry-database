@@ -1,7 +1,8 @@
 import json
 import os
 from typing import Dict, List, Any, Optional
-from schema.food_data import StandardNutrients
+from schema.food_data import BrainNutrients, StandardNutrients
+from utils.json_utils import JSONParser
 from utils.logging_utils import setup_logging
 
 logger = setup_logging(__name__)
@@ -55,7 +56,7 @@ class NutrientUtils:
         Parse nutrient predictions from AI response.
         
         Args:
-            response: AI response (string or parsed dict)
+            response: AI response (string, parsed dict, or BrainNutrients object)
             
         Returns:
             Dictionary of nutrient predictions
@@ -63,8 +64,27 @@ class NutrientUtils:
         try:
             # If response is a string, parse it
             if isinstance(response, str):
-                # Extract JSON from the response using JSONParser
                 predictions = JSONParser.parse_json(response, {})
+            elif isinstance(response, BrainNutrients):
+                # Convert BrainNutrients to dict
+                predictions = {}
+                # Get regular brain nutrients
+                for attr_name in dir(response):
+                    if (not attr_name.startswith('_') and 
+                        not callable(getattr(response, attr_name)) and
+                        attr_name != "omega3"):
+                        value = getattr(response, attr_name)
+                        if isinstance(value, (int, float)) and value is not None:
+                            predictions[attr_name] = value
+                
+                # Handle omega3 specially
+                if response.omega3:
+                    omega3 = response.omega3
+                    for attr_name in dir(omega3):
+                        if not attr_name.startswith('_') and not callable(getattr(omega3, attr_name)):
+                            value = getattr(omega3, attr_name)
+                            if isinstance(value, (int, float)) and value is not None:
+                                predictions[f"omega3.{attr_name}"] = value
             else:
                 predictions = response
             
@@ -79,7 +99,7 @@ class NutrientUtils:
         except Exception as e:
             logger.error(f"Error parsing nutrient predictions: {e}")
             return {}
-
+    
     @staticmethod
     def parse_bioactive_predictions(response: Any) -> Dict[str, float]:
         """

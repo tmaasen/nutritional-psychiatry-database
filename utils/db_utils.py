@@ -141,6 +141,14 @@ class PostgresClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Cleanup resources when exiting context manager."""
         self.close()
+    
+    def __del__(self):
+        """Ensure connection pool is closed when object is garbage collected."""
+        try:
+            self.close()
+        except Exception:
+            # Suppress errors during garbage collection
+            pass
         
     def is_connected(self):
         """Check if the database connection is working."""

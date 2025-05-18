@@ -160,6 +160,8 @@ class DatabaseOrchestrator:
         
         def execute() -> List[str]:
             saved_ids = []
+
+            self.food_list = ["blueberries"]
             
             if not self.food_list:
                 logger.info("No food list provided.")
@@ -605,7 +607,7 @@ def main():
     parser.add_argument("--only", nargs="+", help="Steps to run (ignores skip)")
     parser.add_argument("--batch-size", type=int, help="Batch size for processing")
     parser.add_argument("--force", action="store_true", help="Force reprocessing")
-    parser.add_argument("--interactive", action="store_true", help="Run interactively")
+    parser.add_argument("--interactive", action="store_true", help="Run interactively", default=True)
     parser.add_argument("--continue-on-failure", action="store_true", 
                         help="Continue processing even if steps fail")
     
