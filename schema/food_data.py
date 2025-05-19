@@ -361,10 +361,6 @@ class FoodData:
         completeness = fields_with_values / total_fields if total_fields > 0 else 0.0
         return round(completeness, 2)
     
-    def update_completeness(self) -> None:
-        """Update the completeness score in data_quality."""
-        self.data_quality.completeness = self.calculate_completeness()
-    
     def has_brain_nutrient(self, nutrient: str) -> bool:
         """Check if the food has a specific brain nutrient."""
         if not self.brain_nutrients:

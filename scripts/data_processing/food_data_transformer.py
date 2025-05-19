@@ -71,9 +71,6 @@ class FoodDataTransformer:
         # Update timestamps
         transformed.update_timestamp()
         
-        # Calculate completeness
-        transformed.update_completeness()
-        
         # Mark as processed
         transformed.processed = True
         
@@ -200,45 +197,31 @@ class FoodDataTransformer:
         # Create empty bioactive compounds
         bioactive_compounds = BioactiveCompounds()
         
-        # Create the FoodData object for completeness calculation
-        temp_food = FoodData(
-            food_id=food_id,
-            name=product.get("product_name", ""),
-            category=category,
-            standard_nutrients=standard_nutrients,
-            brain_nutrients=brain_nutrients
-        )
-        
-        # Calculate completeness
-        completeness = calculate_completeness(temp_food, COMPLETENESS_REQUIRED_FIELDS)
-        
-        # Create data quality object
-        data_quality = DataQuality(
-            completeness=completeness,
-            overall_confidence=DEFAULT_CONFIDENCE_RATINGS.get("openfoodfacts", 7),  
-            brain_nutrients_source="openfoodfacts"
-        )
-        
-        # Calculate inflammatory index
-        inflammatory_index = self._calculate_inflammatory_index(product, nutriments)
-        
-        # Create the complete FoodData object
         transformed = FoodData(
             food_id=food_id,
             name=product.get("product_name", ""),
             description=product.get("generic_name", product.get("product_name", "")),
             category=category,
+            data_quality=DataQuality(
+                completeness=0,
+                overall_confidence=DEFAULT_CONFIDENCE_RATINGS.get("openfoodfacts", 7),  
+                brain_nutrients_source="openfoodfacts"
+            ),
             serving_info=serving_info,
             standard_nutrients=standard_nutrients,
             brain_nutrients=brain_nutrients,
             bioactive_compounds=bioactive_compounds,
             mental_health_impacts=[],
-            data_quality=data_quality,
             metadata=metadata,
-            inflammatory_index=inflammatory_index,
             processed=True,
             validated=False
         )
+        
+        # Calculate completeness
+        transformed.data_quality.completeness = calculate_completeness(transformed, COMPLETENESS_REQUIRED_FIELDS)
+        
+        # Calculate inflammatory index
+        transformed.inflammatory_index = self._calculate_inflammatory_index(product, nutriments)
         
         return transformed
 

@@ -112,7 +112,7 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient,
             # Import to DB
             food_id = db_client.import_food_from_json(transformed)
             imported_foods.append(food_id)
-            logger.info(f"Imported {transformed['name']} to database")
+            logger.info(f"Imported {transformed.name} to database")
             count += 1
             
             # Stop if we've reached the limit
