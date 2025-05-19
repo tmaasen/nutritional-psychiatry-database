@@ -5,7 +5,7 @@ import re
 from typing import Dict, List, Optional, Union
 
 # Import utility modules
-from schema.food_data import BrainNutrients, DataQuality, FoodData, InflammatoryIndex, Metadata, ServingInfo, StandardNutrients
+from schema.food_data import BioactiveCompounds, BrainNutrients, DataQuality, FoodData, InflammatoryIndex, Metadata, Omega3, ServingInfo, StandardNutrients
 from utils.logging_utils import setup_logging
 from utils.data_utils import generate_food_id
 from constants.food_data_constants import (
@@ -148,7 +148,7 @@ class FoodDataTransformer:
         
         return transformed
     
-    def transform_off_data(self, off_product: Dict) -> Dict:
+    def transform_off_data(self, off_product: Dict) -> FoodData:
         """
         Transform OpenFoodFacts product data to our schema format.
         
@@ -156,14 +156,14 @@ class FoodDataTransformer:
             off_product: OpenFoodFacts product data
             
         Returns:
-            Dictionary in our schema format
+            FoodData object in our schema format
         """
         # Extract product data
         product = off_product.get("product", {})
         
         if not product:
             logger.warning("Empty OpenFoodFacts product data")
-            return {}
+            return FoodData(food_id="", name="", category="", standard_nutrients=StandardNutrients())
         
         # Get nutriment data
         nutriments = product.get("nutriments", {})
@@ -176,11 +176,12 @@ class FoodDataTransformer:
         
         # Create metadata
         source_url = f"https://world.openfoodfacts.org/product/{product.get('code', '')}"
+        source_url_2 = "https://search.openfoodfacts.org/search"
         metadata = Metadata(
             version="0.1.0",
             created=datetime.now().isoformat(),
             last_updated=datetime.now().isoformat(),
-            source_urls=[source_url],
+            source_urls=[source_url, source_url_2],
             source_ids={
                 "off_id": str(product.get('code', ''))
             }
@@ -196,16 +197,32 @@ class FoodDataTransformer:
         # Extract serving info
         serving_info = self._extract_serving_info(product)
         
+        # Create empty bioactive compounds
+        bioactive_compounds = BioactiveCompounds()
+        
+        # Create the FoodData object for completeness calculation
+        temp_food = FoodData(
+            food_id=food_id,
+            name=product.get("product_name", ""),
+            category=category,
+            standard_nutrients=standard_nutrients,
+            brain_nutrients=brain_nutrients
+        )
+        
         # Calculate completeness
-        data = {
-            "standard_nutrients": standard_nutrients,
-            "brain_nutrients": brain_nutrients
-        }
-        completeness = calculate_completeness(data, COMPLETENESS_REQUIRED_FIELDS)
+        completeness = calculate_completeness(temp_food, COMPLETENESS_REQUIRED_FIELDS)
+        
+        # Create data quality object
+        data_quality = DataQuality(
+            completeness=completeness,
+            overall_confidence=DEFAULT_CONFIDENCE_RATINGS.get("openfoodfacts", 7),  
+            brain_nutrients_source="openfoodfacts"
+        )
         
         # Calculate inflammatory index
         inflammatory_index = self._calculate_inflammatory_index(product, nutriments)
-
+        
+        # Create the complete FoodData object
         transformed = FoodData(
             food_id=food_id,
             name=product.get("product_name", ""),
@@ -214,22 +231,17 @@ class FoodDataTransformer:
             serving_info=serving_info,
             standard_nutrients=standard_nutrients,
             brain_nutrients=brain_nutrients,
-            bioactive_compounds={},
+            bioactive_compounds=bioactive_compounds,
             mental_health_impacts=[],
-            data_quality=DataQuality(
-                completeness=completeness,
-                overall_confidence=DEFAULT_CONFIDENCE_RATINGS.get("openfoodfacts", 7),  
-                brain_nutrients_source="openfoodfacts"
-            ),
-            metadata=metadata
+            data_quality=data_quality,
+            metadata=metadata,
+            inflammatory_index=inflammatory_index,
+            processed=True,
+            validated=False
         )
         
-        # Add inflammatory index if available
-        if inflammatory_index:
-            transformed.inflammatory_index = inflammatory_index
-        
         return transformed
-    
+
     def _map_category(self, category_data: Union[str, List[str]], is_tag: bool = True) -> str:
         """
         Map source category to our simplified categories.
@@ -292,17 +304,46 @@ class FoodDataTransformer:
         )
     
     def _extract_usda_standard_nutrients(self, food_nutrients: List[Dict]) -> StandardNutrients:
-        return NutrientUtils.extract_nutrients_by_mapping(
-            food_nutrients, 
-            self.mappings["usda"]["standard_nutrients"],
-            id_field="nutrient.name",
-            value_field="amount",
-            unit_field="nutrient.unitName"
-        )
+        """
+        Extract standard nutrients from USDA food data.
+        
+        Args:
+            food_nutrients: List of USDA nutrient data
+            
+        Returns:
+            StandardNutrients object
+        """
+        standard_nutrients = StandardNutrients()
+        
+        for nutrient in food_nutrients:
+            nutrient_name = nutrient.get("nutrient", {}).get("name")
+            if nutrient_name in self.mappings["usda"]["standard_nutrients"]:
+                schema_name = self.mappings["usda"]["standard_nutrients"][nutrient_name]
+                value = nutrient.get("amount")
+                
+                if value is not None:
+                    # Unit conversions if needed
+                    unit = nutrient.get("nutrient", {}).get("unitName", "")
+                    if unit == "µg":
+                        value /= 1000  # Convert µg to mg
+                    
+                    # Set attribute on the StandardNutrients object
+                    setattr(standard_nutrients, schema_name, value)
+        
+        return standard_nutrients
     
     def _extract_usda_brain_nutrients(self, food_nutrients: List[Dict]) -> BrainNutrients:
+        """
+        Extract brain nutrients from USDA food data.
+        
+        Args:
+            food_nutrients: List of USDA nutrient data
+            
+        Returns:
+            BrainNutrients object
+        """
         brain_nutrients = BrainNutrients()
-        omega3 = {}
+        omega3_values = {}
         has_omega3 = False
         
         for nutrient in food_nutrients:
@@ -327,22 +368,29 @@ class FoodDataTransformer:
                     # Check if this is an omega-3 related nutrient
                     if "omega" in schema_name.lower():
                         has_omega3 = True
+                        # Extract the part after omega3.
                         if schema_name == "omega3.total_g":
-                            omega3["total_g"] = value
+                            omega3_values["total_g"] = value
                         elif schema_name == "omega3.epa_mg":
-                            omega3["epa_mg"] = value
+                            omega3_values["epa_mg"] = value
                         elif schema_name == "omega3.dha_mg":
-                            omega3["dha_mg"] = value
+                            omega3_values["dha_mg"] = value
                         elif schema_name == "omega3.ala_mg":
-                            omega3["ala_mg"] = value
+                            omega3_values["ala_mg"] = value
                     else:
                         setattr(brain_nutrients, schema_name, value)
         
         # Add omega-3 data if available
         if has_omega3:
+            omega3 = Omega3(
+                total_g=omega3_values.get("total_g"),
+                epa_mg=omega3_values.get("epa_mg"),
+                dha_mg=omega3_values.get("dha_mg"),
+                ala_mg=omega3_values.get("ala_mg"),
+                confidence=DEFAULT_CONFIDENCE_RATINGS.get("omega3", 7)
+            )
             brain_nutrients.omega3 = omega3
-            brain_nutrients.confidence = DEFAULT_CONFIDENCE_RATINGS.get("omega3", 7)
-            brain_nutrients.source = "usda_provided"
+        
         return brain_nutrients
     
     def _extract_off_standard_nutrients(self, nutriments: Dict) -> StandardNutrients:
@@ -355,11 +403,11 @@ class FoodDataTransformer:
                 # Unit conversions if needed
                 if off_name in NUTRIENTS_G_TO_MG:
                     value = NutrientUtils.g_to_mg(value)
-                
                 elif off_name in NUTRIENTS_G_TO_MCG:
                     value = NutrientUtils.g_to_mcg(value)
                 
-                standard_nutrients.nutrients[schema_name] = value
+                # Set attribute on the object
+                setattr(standard_nutrients, schema_name, value)
         
         return standard_nutrients
     
@@ -374,20 +422,19 @@ class FoodDataTransformer:
                 # Unit conversions
                 if off_name in ["tryptophan_100g", "tyrosine_100g", "choline_100g"]:
                     value = NutrientUtils.g_to_mg(value)
-                
                 elif off_name in ["folates_100g", "vitamin-b12_100g", "vitamin-d_100g"]:
                     value = NutrientUtils.g_to_mcg(value)
-                
                 elif off_name in ["magnesium_100g", "zinc_100g", "iron_100g"]:
                     value = NutrientUtils.g_to_mg(value)
-                
                 elif off_name == "selenium_100g":
                     value = NutrientUtils.g_to_mcg(value)
                 
+                # Set attribute on the object
                 setattr(brain_nutrients, schema_name, value)
         
         # Extract omega-3 data
-        omega3 = {}
+        omega3_values = {}
+        has_omega3 = False
         
         for off_name, schema_name in self.mappings["off"]["omega3"].items():
             if off_name in nutriments and nutriments[off_name] is not None:
@@ -397,13 +444,19 @@ class FoodDataTransformer:
                 if off_name in ["dha_100g", "epa_100g", "ala_100g"]:
                     value = NutrientUtils.g_to_mg(value)
                 
-                omega3[schema_name] = value
+                omega3_values[schema_name] = value
+                has_omega3 = True
         
-        # Add confidence level if we have omega-3 data
-        if omega3:
+        # Add omega-3 data if available
+        if has_omega3:
+            omega3 = Omega3(
+                total_g=omega3_values.get("total_g"),
+                epa_mg=omega3_values.get("epa_mg"),
+                dha_mg=omega3_values.get("dha_mg"),
+                ala_mg=omega3_values.get("ala_mg"),
+                confidence=DEFAULT_CONFIDENCE_RATINGS.get("omega3", 7)
+            )
             brain_nutrients.omega3 = omega3
-            brain_nutrients.confidence = DEFAULT_CONFIDENCE_RATINGS.get("omega3", 7)
-            brain_nutrients.source = "openfoodfacts"
         
         return brain_nutrients
     

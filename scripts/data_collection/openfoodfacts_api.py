@@ -1,15 +1,9 @@
-"""
-OpenFoodFacts API Integration with Python-native Schema
-This script interfaces with the OpenFoodFacts API to retrieve food data.
-"""
-
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from scripts.data_processing.food_data_transformer import FoodDataTransformer
 from utils.db_utils import PostgresClient
 from utils.api_utils import make_api_request
 from utils.logging_utils import setup_logging
-
 from constants.food_data_constants import OFF_DEFAULT_FIELDS
 
 logger = setup_logging(__name__)
@@ -17,38 +11,29 @@ logger = setup_logging(__name__)
 class OpenFoodFactsAPI:
     """Client for the OpenFoodFacts API."""
     
-    def __init__(self, user_agent: str = None, base_url: str = None):
+    def __init__(self, user_agent: str = None, base_url: str = None, search_url: str = None):
         self.user_agent = user_agent or "NutritionalPsychiatryDatabase/1.0"
         self.base_url = base_url or "https://world.openfoodfacts.org/api/v2"
+        self.search_url = search_url or "https://search.openfoodfacts.org/search"
         self.headers = {"User-Agent": self.user_agent}
     
-    def search_products(self, 
-                        query: str = None, 
-                        brands: str = None,
-                        categories: str = None,
-                        page: int = 1, 
-                        page_size: int = 20,
-                        fields: str = None) -> Dict:
-        endpoint = f"{self.base_url}/search"
-        
-        if fields is None:
-            fields = OFF_DEFAULT_FIELDS
-        
+    def search_products(self, query: str, limit: int = 3) -> Dict:
+        """
+        Search products using the newer search-a-licious API with country filtering.
+        """
         params = {
-            "search_terms": query,
-            "brands": brands,
-            "categories": categories,
-            "page": page,
-            "page_size": page_size,
-            "fields": fields,
-            "sort_by": "popularity_score"
+            "q": query,
+            "page": 1, # Page to request, starts at 1.
+            "page_size": 1, # Number of results to return per page.
+            "langs": "['en']",
+            "fields": OFF_DEFAULT_FIELDS
         }
         
-        # Remove None values
-        params = {k: v for k, v in params.items() if v is not None}
+        # if country:
+        #     params["value_0"] = "en:united-states"
         
         return make_api_request(
-            url=endpoint,
+            url=self.search_url,
             params=params,
             headers=self.headers,
             retry_count=3,
@@ -78,16 +63,11 @@ class OpenFoodFactsAPI:
             rate_limit_delay=1.0
         )
 
-def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, query: str, limit: int = 10) -> List[str]:
+def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, 
+                     query: str, limit: int = 3) -> List[str]:
     """
-    Search for products and import them to the database.
-    
-    Args:
-        api_client: Initialized API client
-        db_client: Database client
-        query: Search term
-        limit: Maximum number of products to save
-        
+    Search for products, get complete data, transform, and import to database.
+ 
     Returns:
         List of imported food IDs
     """
@@ -95,20 +75,38 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
         raise ValueError("Database client is required for import")
         
     imported_foods = []
-    logger.info(f"Searching for '{query}'")
     food_transformer = FoodDataTransformer()
     
-    results = api_client.search_products(query)
+    # Step 1: Search for products with country filter
+    search_results = api_client.search_products(
+        query=query,
+        limit=limit
+    )
     
-    if not results.get("products"):
-        logger.warning(f"No results found for {query}")
+    if not search_results.get("hits"):
+        logger.warning(f"No results found for query '{query}'")
         return imported_foods
     
     # Process each product up to the limit
     count = 0
-    for product in results.get("products", [])[:limit]:
+    for product_brief in search_results.get("hits", [])[:limit]:
         try:
-            product_data = {"product": product}
+            product_code = product_brief.get("code")
+            if not product_code:
+                continue
+                
+            # Log the product we're fetching
+            logger.info(f"Retrieving complete data for {product_brief.get('product_name', 'Unknown')} (Code: {product_code})")
+            
+            # Fetch complete product data
+            product_data = api_client.get_product(product_code)
+            
+            # Check if product data contains nutrients
+            if "product" not in product_data or "nutriments" not in product_data["product"]:
+                logger.warning(f"Product {product_code} does not contain nutrient data, skipping")
+                continue
+            
+            # Transform the data
             transformed = food_transformer.transform_off_data(product_data)
             
             # Import to DB
@@ -116,35 +114,12 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, q
             imported_foods.append(food_id)
             logger.info(f"Imported {transformed['name']} to database")
             count += 1
+            
+            # Stop if we've reached the limit
+            if count >= limit:
+                break
+                
         except Exception as e:
-            logger.error(f"Error processing product {product.get('code')}: {e}")
+            logger.error(f"Error processing product {product_brief.get('code')}: {e}")
     
     return imported_foods
-
-def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Fetch and transform OpenFoodFacts data")
-    parser.add_argument("--query", help="Search term", default="")
-    parser.add_argument("--limit", type=int, help="Maximum number of products to import", default=10)
-    
-    args = parser.parse_args()
-    
-    try:
-        db_client = PostgresClient()        
-        api_client = OpenFoodFactsAPI()
-        
-        imported_foods = search_and_import(
-            api_client=api_client,
-            db_client=db_client,
-            query=args.query, 
-            limit=args.limit
-        )
-        
-        logger.info(f"Successfully imported {len(imported_foods)} products")
-        
-    except Exception as e:
-        logger.error(f"Error: {e}")
-
-if __name__ == "__main__":
-    main()

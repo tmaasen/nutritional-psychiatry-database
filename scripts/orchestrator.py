@@ -208,6 +208,8 @@ class DatabaseOrchestrator:
         
         def execute() -> List[str]:
             saved_ids = []
+
+            self.food_list = ["blueberries"]
             
             if not self.food_list:
                 logger.info("No food list provided. Skipping OpenFoodFacts data collection.")
