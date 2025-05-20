@@ -6,15 +6,12 @@ from typing import Optional, Dict, Any, List
 from functools import wraps
 
 def setup_logging(name=None, level=logging.INFO):
-    """Simple cloud-ready logging setup."""
     logger = logging.getLogger(name or __name__)
     logger.setLevel(level)
     
-    # Clear existing handlers
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
     
-    # Add stdout handler
     handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
@@ -23,12 +20,6 @@ def setup_logging(name=None, level=logging.INFO):
     return logger
 
 def log_execution_time(logger: Optional[logging.Logger] = None):
-    """
-    Decorator to log function execution time.
-    
-    Args:
-        logger: Logger to use (defaults to module-level logger)
-    """
     if logger is None:
         logger = logging.getLogger()
     
@@ -51,7 +42,6 @@ def log_api_request(logger, api: str, task_type: str, model: str, messages: List
     )
 
 def log_api_response(logger, api: str, task_type: str, response: Any):
-    # Log minimal response info to avoid cluttering logs
     logger.debug(f"API Response: {api}, Task: {task_type}, Success: True")
 
 def log_api_error(logger, api: str, task_type: str, error: Exception, context: Dict):

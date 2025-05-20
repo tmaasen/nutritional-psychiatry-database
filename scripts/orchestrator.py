@@ -125,7 +125,6 @@ class DatabaseOrchestrator:
         dependencies: Optional[List[str]] = None
     ) -> Any:
         if not self._should_run_step(step_name):
-            logger.info(f"Skipping step: {step_name}")
             return None
         
         # Check dependencies
@@ -135,15 +134,10 @@ class DatabaseOrchestrator:
                 logger.error(f"Cannot run {step_name}: missing dependencies {missing_deps}")
                 return None
         
-        logger.info(f"Running step: {step_name}")
-        
         try:
             start_time = time.time()
             result = step_func()
             end_time = time.time()
-            
-            # Log completion
-            logger.info(f"Step {step_name} completed in {end_time - start_time:.2f} seconds")
             
             # Mark as completed
             self.completed_steps.add(step_name)
@@ -207,21 +201,15 @@ class DatabaseOrchestrator:
         def execute() -> List[str]:
             saved_ids = []
 
-            self.food_list = ["blueberries"]
-            
             if not self.food_list:
-                logger.info("No food list provided. Skipping OpenFoodFacts data collection.")
                 return []
             
             # Process in batches
             for i in range(0, len(self.food_list), self.batch_size):
                 batch = self.food_list[i:i+self.batch_size]
-                logger.info(f"Processing OpenFoodFacts batch {i//self.batch_size + 1}/{(len(self.food_list)-1)//self.batch_size + 1} ({len(batch)} foods)")
                 
                 for food_query in batch:
                     try:
-                        logger.info(f"Collecting OpenFoodFacts data for {food_query}...")
-                        
                         # Use the existing search_and_import function
                         imported_foods = off_search_and_import(
                             api_client=self.off_client,
@@ -232,7 +220,6 @@ class DatabaseOrchestrator:
                         
                         if imported_foods:
                             saved_ids.extend(imported_foods)
-                            logger.info(f"Saved OpenFoodFacts data for {food_query} with ID(s): {imported_foods}")
                         else:
                             logger.warning(f"No results found for {food_query}")
                     
@@ -249,20 +236,15 @@ class DatabaseOrchestrator:
         return self.run_step(step_name, execute)
     
     def collect_literature_data(self) -> List[str]:
-        """Collect food data from literature."""
         step_name = "literature_data_collection"
         
         def execute() -> List[str]:
             saved_ids = []
-            
-            # Use data from config if available
             literature_sources = self.config.literature_sources
             
             if not literature_sources:
-                logger.warning("No literature sources specified. Skipping literature data collection.")
+                logger.warning("No literature sources specified")
                 return []
-            
-            logger.info(f"Processing {len(literature_sources)} literature sources")
             
             for source in literature_sources:
                 try:
@@ -275,12 +257,10 @@ class DatabaseOrchestrator:
                         continue
                     
                     if source_type == "pdf":
-                        logger.info(f"Processing PDF: {source_path} for {source_food}")
                         food_id = self.literature_client.process_pdf(source_path)
                         if food_id:
                             saved_ids.append(food_id)
                     elif source_type == "url":
-                        logger.info(f"Processing URL: {source_path} for {source_food}")
                         food_id = self.literature_client.process_url(source_path)
                         if food_id:
                             saved_ids.append(food_id)
@@ -337,25 +317,28 @@ class DatabaseOrchestrator:
                             food_obj = FoodData.from_dict(food_data)
                             
                             # Transform the food data
-                            transformed_data = self.transformer.transform(food_obj)
+                            food_obj.normalize_category()
                             
                             # Validate the transformed data
-                            validation_errors = self.validator.validate_food_data(transformed_data.to_dict())
+                            validation_errors = self.validator.validate_food_data(food_obj.to_dict())
                             
                             if validation_errors:
                                 logger.warning(f"Validation errors for {food_name}: {validation_errors}")
                                 continue
                             
-                            # Save the transformed food data
+                            # Save the transformed data to normalized tables
+                            self._save_normalized_data(food_obj)
+                            
+                            # Update the foods table
                             with self.db_client.get_cursor() as cursor:
                                 update_query = """
                                 UPDATE foods
-                                SET food_data = %s, processed = TRUE, last_updated = NOW()
+                                SET processed = TRUE, last_updated = NOW()
                                 WHERE food_id = %s
                                 RETURNING food_id
                                 """
                                 
-                                cursor.execute(update_query, (transformed_data.to_dict(), food_id))
+                                cursor.execute(update_query, (food_obj.to_dict(), food_id))
                                 result = cursor.fetchone()
                                 
                                 if result and result['food_id'] == food_id:
@@ -482,10 +465,8 @@ class DatabaseOrchestrator:
                             })
                             raise
                     
-                    # Move to next batch
                     offset += batch_size
                     
-                    # Exit if batch is smaller than batch size (last batch)
                     if len(results) < batch_size:
                         break
                 

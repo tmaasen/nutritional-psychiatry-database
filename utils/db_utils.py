@@ -132,7 +132,6 @@ class PostgresClient:
         """Close the connection pool."""
         if hasattr(self, 'connection_pool'):
             self.connection_pool.closeall()
-            logger.info("Closed connection pool")
     
     def __enter__(self):
         """Enable usage with context manager for automatic resource cleanup."""
@@ -147,7 +146,6 @@ class PostgresClient:
         try:
             self.close()
         except Exception:
-            # Suppress errors during garbage collection
             pass
         
     def is_connected(self):
@@ -165,30 +163,25 @@ class PostgresClient:
         attempt = 0
         while attempt < max_attempts:
             try:
-                logger.info(f"Attempting database reconnection ({attempt+1}/{max_attempts})")
-                # Close existing pool if it exists
                 if hasattr(self, 'connection_pool'):
                     try:
                         self.connection_pool.closeall()
                     except Exception:
                         pass
                     
-                # Create a new connection pool
                 self.connection_pool = pool.ThreadedConnectionPool(
-                    1, 10,  # Use same defaults as in __init__
+                    1, 10,
                     self.connection_string
                 )
                 
-                # Test the connection
                 if self.is_connected():
-                    logger.info("Database reconnection successful")
                     return True
                     
             except Exception as e:
                 logger.error(f"Database reconnection failed: {e}")
                 
             attempt += 1
-            time.sleep(delay * (2 ** attempt))  # Exponential backoff
+            time.sleep(delay * (2 ** attempt))
             
         logger.critical("Failed to reconnect to database after multiple attempts")
         return False
@@ -250,30 +243,16 @@ class PostgresClient:
             Food ID of the imported food
         """
         try:
-            # Convert to FoodData object if needed
             if isinstance(food_json, str):
                 food_data = json.loads(food_json)
                 food = FoodData.from_dict(food_data)
             elif isinstance(food_json, dict):
                 food = FoodData.from_dict(food_json)
             else:
-                food = food_json  # Assume it's already a FoodData object
+                food = food_json
             
-            # Extract source from food_id
-            source = "unknown"
-            if food.food_id.startswith("usda_"):
-                source = "usda"
-            elif food.food_id.startswith("off_"):
-                source = "openfoodfacts"
-            elif food.food_id.startswith("lit_"):
-                source = "literature"
-            elif food.food_id.startswith("ai_"):
-                source = "ai_generated"
-            
-            # Start transaction
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # 1. Insert/update main food record
                     cursor.execute(FOOD_UPSERT, (
                         food.food_id, 
                         food.name, 
@@ -285,7 +264,6 @@ class PostgresClient:
                     
                     food_id = cursor.fetchone()[0]
                     
-                    # 2. Insert/update standard nutrients if present
                     if food.standard_nutrients:
                         sn = food.standard_nutrients
                         cursor.execute(STANDARD_NUTRIENTS_UPSERT, (
@@ -311,7 +289,6 @@ class PostgresClient:
                             getattr(sn, 'vitamin_a_iu', None)
                         ))
                     
-                    # 3. Insert/update brain nutrients if present
                     if food.brain_nutrients:
                         bn = food.brain_nutrients
                         cursor.execute(BRAIN_NUTRIENTS_UPSERT, (
@@ -329,7 +306,6 @@ class PostgresClient:
                             getattr(bn, 'choline_mg', None)
                         ))
                         
-                        # 3a. Insert/update omega3 fatty acids if present
                         if hasattr(bn, 'omega3') and bn.omega3:
                             o3 = bn.omega3
                             cursor.execute(OMEGA3_UPSERT, (
@@ -341,7 +317,6 @@ class PostgresClient:
                                 getattr(o3, 'confidence', None)
                             ))
                     
-                    # 4. Insert/update bioactive compounds if present
                     if hasattr(food, 'bioactive_compounds') and food.bioactive_compounds:
                         bc = food.bioactive_compounds
                         cursor.execute(BIOACTIVE_COMPOUNDS_UPSERT, (
@@ -354,7 +329,6 @@ class PostgresClient:
                             getattr(bc, 'prebiotic_fiber_g', None)
                         ))
                     
-                    # 5. Insert/update serving info if present
                     if hasattr(food, 'serving_info') and food.serving_info:
                         si = food.serving_info
                         cursor.execute(SERVING_INFO_UPSERT, (
@@ -364,10 +338,8 @@ class PostgresClient:
                             getattr(si, 'household_serving', None)
                         ))
                     
-                    # 6. Insert/update data quality if present
                     if hasattr(food, 'data_quality') and food.data_quality:
                         dq = food.data_quality
-                        # Convert source_priority to JSON if it's a dict/object
                         sp = None
                         if hasattr(dq, 'source_priority') and dq.source_priority:
                             if hasattr(dq.source_priority, '__dict__'):
@@ -384,10 +356,8 @@ class PostgresClient:
                             sp
                         ))
                     
-                    # 7. Insert/update metadata if present
                     if hasattr(food, 'metadata') and food.metadata:
                         md = food.metadata
-                        # Convert arrays to JSON
                         source_urls = json.dumps(md.source_urls) if hasattr(md, 'source_urls') and md.source_urls else '[]'
                         source_ids = json.dumps(md.source_ids) if hasattr(md, 'source_ids') and md.source_ids else '{}'
                         tags = json.dumps(md.tags) if hasattr(md, 'tags') and md.tags else '[]'
@@ -403,12 +373,9 @@ class PostgresClient:
                             tags
                         ))
                     
-                    # 8. Insert/update mental health impacts if present
                     if hasattr(food, 'mental_health_impacts') and food.mental_health_impacts:
-                        # First delete existing impacts
                         cursor.execute(MENTAL_HEALTH_IMPACTS_DELETE, (food_id,))
                         
-                        # Then insert each impact
                         for impact in food.mental_health_impacts:
                             cursor.execute(MENTAL_HEALTH_IMPACT_INSERT, (
                                 food_id, 
@@ -424,7 +391,6 @@ class PostgresClient:
                             
                             impact_id = cursor.fetchone()[0]
                             
-                            # Insert research support for this impact
                             if hasattr(impact, 'research_support') and impact.research_support:
                                 for support in impact.research_support:
                                     cursor.execute(RESEARCH_SUPPORT_INSERT, (
@@ -436,13 +402,7 @@ class PostgresClient:
                                         getattr(support, 'year', None)
                                     ))
                     
-                    # 9. Insert/update other sections as needed...
-                    # Add similar blocks for other components using their respective SQL constants
-                    
-                    # Commit the transaction explicitly 
                     conn.commit()
-                    
-                    logger.info(f"Successfully imported food with ID: {food_id}")
                     return food_id
                     
         except Exception as e:

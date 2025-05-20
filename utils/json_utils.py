@@ -16,12 +16,10 @@ class JSONParser:
     
     @staticmethod
     def extract_json(text: str) -> Optional[str]:
-        # Try to find JSON between curly braces
         json_match = re.search(r'(\{.*\})', text, re.DOTALL)
         if json_match:
             return json_match.group(1)
         
-        # Try to find JSON between square brackets
         json_match = re.search(r'(\[.*\])', text, re.DOTALL)
         if json_match:
             return json_match.group(1)
@@ -33,7 +31,6 @@ class JSONParser:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            # Try to extract JSON from text
             json_str = JSONParser.extract_json(text)
             if json_str:
                 try:

@@ -189,6 +189,19 @@ BRAIN_NUTRIENTS_TO_PREDICT = [
     "omega3.ala_mg"
 ]
 
+BRAIN_NUTRIENTS_FIELDS = [
+    "tryptophan_mg", "vitamin_b6_mg", "folate_mcg", 
+    "vitamin_b12_mcg", "vitamin_d_mcg", "magnesium_mg", 
+    "zinc_mg", "iron_mg"
+]
+
+OMEGA3_FIELDS = ["total_g", "epa_mg", "dha_mg", "ala_mg"]
+
+STD_NUTRIENT_FIELDS = [
+    "calories", "protein_g", "carbohydrates_g", 
+    "fat_g", "fiber_g", "sugars_g"
+]
+
 # Default bioactive compounds to predict
 BIOACTIVE_COMPOUNDS_TO_PREDICT = [
     "polyphenols_mg",

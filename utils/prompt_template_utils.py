@@ -37,10 +37,8 @@ class TemplateManager:
         sanitized = {}
         for key, value in variables.items():
             if isinstance(value, str):
-                # Remove potential template control sequences
                 sanitized[key] = re.sub(r'\{%.*?%\}', '', value)
             elif isinstance(value, (dict, list)):
-                # For dicts/lists, preserve structure
                 sanitized[key] = value
             else:
                 sanitized[key] = value

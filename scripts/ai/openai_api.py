@@ -218,8 +218,6 @@ class OpenAIAPI:
         scientific_context: Optional[str] = None,
         reference_foods: Optional[Dict] = None
     ) -> BrainNutrients:
-        """Predict brain-specific nutrients for a food item."""
-        # Convert objects to dictionaries for the template
         if isinstance(standard_nutrients, StandardNutrients):
             standard_nutrients_dict = {k: v for k, v in vars(standard_nutrients).items() 
                                     if not k.startswith('_') and v is not None}
@@ -229,7 +227,6 @@ class OpenAIAPI:
         existing_brain_nutrients_dict = {}
         if existing_brain_nutrients:
             if isinstance(existing_brain_nutrients, BrainNutrients):
-                # Extract attributes, handling omega3 specially
                 existing_brain_nutrients_dict = {k: v for k, v in vars(existing_brain_nutrients).items() 
                                             if not k.startswith('_') and v is not None}
                 if existing_brain_nutrients.omega3:
@@ -249,43 +246,32 @@ class OpenAIAPI:
             "reference_foods_json": reference_foods
         }
         
-        # Create messages from template
         messages = TemplateManager.create_messages_from_template("brain_nutrient_prediction", variables)
-        
         response = await self.complete("nutrient_prediction", messages)
         
         try:
-            # Parse and validate prediction
             predicted_nutrients = JSONParser.parse_json(response, {})
-            
-            # Create BrainNutrients object
             brain_nutrients = BrainNutrients()
             
-            # Process regular brain nutrients
             for nutrient, value in predicted_nutrients.items():
                 if nutrient.startswith("confidence_") or nutrient == "reasoning":
                     continue
                 
                 if "omega" in nutrient.lower():
-                    # Skip omega-3 for separate handling
                     continue
                 
-                # Only set if it's an actual attribute of BrainNutrients
                 if hasattr(brain_nutrients, nutrient):
                     setattr(brain_nutrients, nutrient, value)
             
-            # Process omega-3 nutrients if present
             has_omega3 = False
             omega3 = Omega3()
             
-            # Look for total omega-3
             for omega_key in ["omega3_total_g", "omega3.total_g", "total_g"]:
                 if omega_key in predicted_nutrients:
                     omega3.total_g = predicted_nutrients[omega_key]
                     has_omega3 = True
                     break
             
-            # Look for omega-3 components
             for component in ["epa_mg", "dha_mg", "ala_mg"]:
                 omega_key = f"omega3_{component}"
                 alt_key = f"omega3.{component}"
@@ -297,23 +283,18 @@ class OpenAIAPI:
                     setattr(omega3, component, predicted_nutrients[alt_key])
                     has_omega3 = True
             
-            # Add confidence if present
             for conf_key in ["confidence_omega3", "omega3_confidence", "confidence_omega3_total_g"]:
                 if conf_key in predicted_nutrients:
                     omega3.confidence = predicted_nutrients[conf_key]
                     break
             
-            # Add omega3 object if we have data
             if has_omega3:
                 brain_nutrients.omega3 = omega3
             
-            # Save to database if ID provided
             if food_id and self.db_client:
-                # Convert to dict for storage - use to_dict() if available
                 if hasattr(brain_nutrients, 'to_dict'):
                     brain_nutrients_dict = brain_nutrients.to_dict()
                 else:
-                    # Manual conversion as fallback
                     brain_nutrients_dict = {k: v for k, v in vars(brain_nutrients).items() 
                                         if not k.startswith('_') and v is not None}
                     if brain_nutrients.omega3:
@@ -327,10 +308,7 @@ class OpenAIAPI:
             
         except Exception as e:
             logger.error(f"Error parsing nutrient prediction response: {e}")
-            logger.error(f"Raw response: {response}")
-            # Create an error object for consistent return type
             error_brain_nutrients = BrainNutrients()
-            # Store error info as attributes
             setattr(error_brain_nutrients, "_error", str(e))
             setattr(error_brain_nutrients, "_raw_response", response)
             return error_brain_nutrients
@@ -402,63 +380,31 @@ class OpenAIAPI:
         scientific_context: Optional[str] = None,
         max_impacts: int = 4
     ) -> List[MentalHealthImpact]:
-        # Prepare template variables
         variables = {
             "food_name": food_name,
             "food_category": food_category,
-            "standard_nutrients_json": standard_nutrients,
-            "brain_nutrients_json": brain_nutrients,
-            "bioactive_compounds_json": bioactive_compounds,
+            "standard_nutrients": standard_nutrients,
+            "brain_nutrients": brain_nutrients,
+            "bioactive_compounds": bioactive_compounds,
             "scientific_context": scientific_context,
             "max_impacts": max_impacts
         }
         
-        # Create messages from template
         messages = TemplateManager.create_messages_from_template("mental_health_impacts", variables)
         
-        response = await self.complete("impact_generation", messages)
+        response = await self.complete("mental_health_impacts", messages)
         
         try:
-            # Parse the response
-            parsed = JSONParser.parse_json(response, [])
+            impacts_data = JSONParser.parse_json(response, [])
             
-            # Handle case where the result isn't a list
-            impacts = MentalHealthImpact()
-            if isinstance(parsed, list):
-                impacts.impacts = parsed
-            elif isinstance(parsed, dict) and "impacts" in parsed:
-                impacts.impacts = parsed["impacts"]
-            else:
-                impacts.impacts = [parsed]  # Treat as single impact
+            if not impacts_data:
+                logger.warning(f"No mental health impacts found for {food_name}")
+                return []
             
-            # Validate each impact
-            valid_impacts = []
-            required_fields = ["impact_type", "direction", "mechanism", "strength", "confidence"]
-            
-            for impact in impacts.impacts:
-                if isinstance(impact, dict) and all(field in impact for field in required_fields):
-                    # Convert research support to proper format if needed
-                    if "research_citations" in impact and "research_support" not in impact:
-                        impact.research_support = []
-                        for citation in impact["research_citations"]:
-                            support = {"citation": citation}
-                            if citation.startswith("PMID:"):
-                                support["pmid"] = citation.split(":", 1)[1].strip()
-                            elif citation.startswith("DOI:"):
-                                support["doi"] = citation.split(":", 1)[1].strip()
-                            impact.research_support.append(support)
-                    
-                    valid_impacts.append(impact)
-            
-            # Save to database if ID provided
-            if food_id and self.db_client:
-                await self.save_prediction(food_id, "mental_health_impacts", valid_impacts)
-            
-            return valid_impacts
+            return impacts_data
             
         except Exception as e:
             logger.error(f"Error parsing mental health impacts response: {e}")
-            logger.error(f"Raw response: {response}")
             return [{"error": str(e), "raw_response": response}]
     
     @log_execution_time
@@ -469,7 +415,6 @@ class OpenAIAPI:
         impact: str,
         scientific_context: Optional[str] = None
     ) -> NutrientInteraction:
-        # Prepare template variables
         variables = {
             "food_name": food_name,
             "nutrient": nutrient,
@@ -477,16 +422,13 @@ class OpenAIAPI:
             "scientific_context": scientific_context
         }
         
-        # Create messages from template
         messages = TemplateManager.create_messages_from_template("mechanism_extraction", variables)
         
         response = await self.complete("mechanism_identification", messages)
         
         try:
-            # Parse the response
             mechanism_data = JSONParser.parse_json(response, NutrientInteraction())
             
-            # Validate required fields
             required_fields = ["primary_pathway", "detailed_steps", "key_molecules", "confidence"]
             if not JSONParser.validate_json_schema(mechanism_data.to_dict(), required_fields):
                 logger.warning(f"Mechanism response missing required fields: {mechanism_data.to_dict()}")
@@ -495,7 +437,6 @@ class OpenAIAPI:
             
         except Exception as e:
             logger.error(f"Error parsing mechanism extraction response: {e}")
-            logger.error(f"Raw response: {response}")
             return {"error": str(e), "raw_response": response}
     
     @log_execution_time

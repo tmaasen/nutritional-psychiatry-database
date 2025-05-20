@@ -8,9 +8,9 @@ from constants.food_data_enums import (
     EffectType, PatternName, PatternContribution, CalculationMethod
 )
 from constants.food_data_constants import (
-    BRAIN_NUTRIENTS_TO_PREDICT, BIOACTIVE_COMPOUNDS_TO_PREDICT,
     DEFAULT_CONFIDENCE_RATINGS, FOOD_CATEGORY_MAPPING
 )
+from utils.completeness_utils import calculate_completeness
 
 @dataclass
 class ServingInfo:
@@ -321,100 +321,7 @@ class FoodData:
         """Convert dataclass to dictionary."""
         return asdict(self)
     
-    def calculate_completeness(self) -> float:
-        """Calculate the completeness score of the food data."""
-        fields_with_values = 0
-        total_fields = 0
-        
-        # Standard nutrients (core fields)
-        std_nutrient_fields = [
-            "calories", "protein_g", "carbohydrates_g", 
-            "fat_g", "fiber_g", "sugars_g"
-        ]
-        
-        total_fields += len(std_nutrient_fields)
-        for field in std_nutrient_fields:
-            if getattr(self.standard_nutrients, field) is not None:
-                fields_with_values += 1
-        
-        # Brain nutrients (if present)
-        if self.brain_nutrients:
-            brain_nutrient_fields = [
-                "tryptophan_mg", "vitamin_b6_mg", "folate_mcg", 
-                "vitamin_b12_mcg", "vitamin_d_mcg", "magnesium_mg", 
-                "zinc_mg", "iron_mg"
-            ]
-            
-            total_fields += len(brain_nutrient_fields)
-            for field in brain_nutrient_fields:
-                if getattr(self.brain_nutrients, field) is not None:
-                    fields_with_values += 1
-            
-            # Omega-3 fields
-            if self.brain_nutrients.omega3:
-                omega3_fields = ["total_g", "epa_mg", "dha_mg", "ala_mg"]
-                total_fields += len(omega3_fields)
-                for field in omega3_fields:
-                    if getattr(self.brain_nutrients.omega3, field) is not None:
-                        fields_with_values += 1
-        
-        completeness = fields_with_values / total_fields if total_fields > 0 else 0.0
-        return round(completeness, 2)
-    
-    def has_brain_nutrient(self, nutrient: str) -> bool:
-        """Check if the food has a specific brain nutrient."""
-        if not self.brain_nutrients:
-            return False
-            
-        if "." in nutrient:
-            # Handle nested paths like omega3.epa_mg
-            section, field = nutrient.split(".")
-            section_obj = getattr(self.brain_nutrients, section, None)
-            return section_obj is not None and getattr(section_obj, field, None) is not None
-            
-        return getattr(self.brain_nutrients, nutrient, None) is not None
-    
-    def get_brain_nutrient(self, nutrient: str) -> Optional[float]:
-        """Get the value of a specific brain nutrient."""
-        if not self.brain_nutrients:
-            return None
-            
-        if "." in nutrient:
-            # Handle nested paths like omega3.epa_mg
-            section, field = nutrient.split(".")
-            section_obj = getattr(self.brain_nutrients, section, None)
-            if section_obj is None:
-                return None
-            return getattr(section_obj, field, None)
-            
-        return getattr(self.brain_nutrients, nutrient, None)
-    
-    def has_mental_health_impacts(self) -> bool:
-        """Check if the food has any mental health impacts."""
-        return bool(self.mental_health_impacts)
-    
-    def get_impacts_by_type(self, impact_type: Union[ImpactType, str]) -> List[MentalHealthImpact]:
-        """Get mental health impacts by type."""
-        if not self.mental_health_impacts:
-            return []
-            
-        # Convert string to enum if needed
-        if isinstance(impact_type, str):
-            try:
-                impact_type_enum = ImpactType(impact_type)
-            except ValueError:
-                # If it's not a valid enum value, use the string as is
-                return [impact for impact in self.mental_health_impacts 
-                        if impact.impact_type == impact_type]
-            
-            return [impact for impact in self.mental_health_impacts 
-                    if impact.impact_type == impact_type_enum]
-        else:
-            return [impact for impact in self.mental_health_impacts 
-                    if impact.impact_type == impact_type]
-    
     def update_timestamp(self) -> None:
-        """Update the last_updated timestamp."""
         self.metadata.last_updated = datetime.now().isoformat()
     
     def normalize_category(self) -> None:
@@ -427,169 +334,107 @@ class FoodData:
             if key in category_lower:
                 self.category = value
                 return
-    
-    def get_missing_brain_nutrients(self) -> List[str]:
-        """Get a list of missing brain nutrients that should be predicted."""
-        missing = []
-        for nutrient in BRAIN_NUTRIENTS_TO_PREDICT:
-            if not self.has_brain_nutrient(nutrient):
-                missing.append(nutrient)
-        return missing
-    
-    def get_missing_bioactive_compounds(self) -> List[str]:
-        """Get a list of missing bioactive compounds that should be predicted."""
-        if not self.bioactive_compounds:
-            return BIOACTIVE_COMPOUNDS_TO_PREDICT.copy()
+
+    @classmethod
+    def _create_nested_dataclass(cls, data: Dict, dataclass_type: type, nested_fields: Dict[str, type] = None) -> Any:
+        """
+        Helper method to create nested dataclass instances.
+        
+        Args:
+            data: Dictionary containing the data
+            dataclass_type: The dataclass type to create
+            nested_fields: Optional dict mapping field names to their nested dataclass types
             
-        missing = []
-        for compound in BIOACTIVE_COMPOUNDS_TO_PREDICT:
-            if getattr(self.bioactive_compounds, compound, None) is None:
-                missing.append(compound)
-        return missing
+        Returns:
+            Instance of the specified dataclass type
+        """
+        if not data:
+            return None
+            
+        # Handle nested fields if specified
+        if nested_fields:
+            data_copy = data.copy()
+            for field_name, field_type in nested_fields.items():
+                if field_name in data_copy:
+                    if isinstance(data_copy[field_name], dict):
+                        data_copy[field_name] = cls._create_nested_dataclass(
+                            data_copy[field_name], 
+                            field_type
+                        )
+            return dataclass_type(**data_copy)
+            
+        return dataclass_type(**data)
     
-    def validate(self) -> List[str]:
-        """Validate the food data against schema requirements."""
-        from schema_validator import SchemaValidator
-        return SchemaValidator.validate_food_data(self.to_dict())
+    @classmethod
+    def _create_list_of_dataclasses(cls, data_list: List[Dict], dataclass_type: type, nested_fields: Dict[str, type] = None) -> List[Any]:
+        """
+        Helper method to create lists of dataclass instances.
+
+        Returns:
+            List of dataclass instances
+        """
+        if not data_list:
+            return []
+            
+        return [
+            cls._create_nested_dataclass(item, dataclass_type, nested_fields)
+            for item in data_list
+        ]
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'FoodData':
         """Create FoodData instance from dictionary."""
+        nested_structure = {
+            'standard_nutrients': (StandardNutrients, {}),
+            'serving_info': (ServingInfo, {}),
+            'brain_nutrients': (BrainNutrients, {'omega3': Omega3}),
+            'bioactive_compounds': (BioactiveCompounds, {}),
+            'data_quality': (DataQuality, {'source_priority': SourcePriority}),
+            'metadata': (Metadata, {}),
+            'inflammatory_index': (InflammatoryIndex, {}),
+            'contextual_factors': (ContextualFactors, {
+                'circadian_effects': CircadianEffects
+            })
+        }
+        
+        # Create a copy of the data to avoid modifying the original
+        data_copy = data.copy()
+        
         # Handle nested dataclasses
-        standard_nutrients_data = data.get('standard_nutrients', {})
-        standard_nutrients = StandardNutrients(**standard_nutrients_data) if standard_nutrients_data else StandardNutrients()
-        
-        data_quality_data = data.get('data_quality', {})
-        # Make a copy to avoid modifying the original
-        data_quality_copy = data_quality_data.copy()
-        
-        # Handle source_priority separately
-        source_priority = None
-        if 'source_priority' in data_quality_copy:
-            source_priority = SourcePriority(**data_quality_copy.pop('source_priority', {}))
-        
-        data_quality = DataQuality(**data_quality_copy, source_priority=source_priority)
-        
-        metadata_data = data.get('metadata', {})
-        metadata = Metadata(**metadata_data) if metadata_data else Metadata(
-            version='0.1.0',
-            created=datetime.now().isoformat(),
-            last_updated=datetime.now().isoformat(),
-        )
-        
-        serving_info = None
-        if 'serving_info' in data:
-            serving_info = ServingInfo(**data['serving_info'])
-        
-        brain_nutrients = None
-        if 'brain_nutrients' in data:
-            brain_data = data['brain_nutrients'].copy()
-            omega3 = None
-            if 'omega3' in brain_data:
-                omega3 = Omega3(**brain_data.pop('omega3', {}))
-            brain_nutrients = BrainNutrients(**brain_data, omega3=omega3)
-        
-        bioactive_compounds = None
-        if 'bioactive_compounds' in data:
-            bioactive_compounds = BioactiveCompounds(**data['bioactive_compounds'])
-        
-        mental_health_impacts = []
-        for impact in data.get('mental_health_impacts', []):
-            impact_copy = impact.copy()
-            research_support = []
-            for support in impact_copy.pop('research_support', []):
-                research_support.append(ResearchSupport(**support))
-            impact_copy['research_support'] = research_support
-            mental_health_impacts.append(MentalHealthImpact(**impact_copy))
-        
-        nutrient_interactions = []
-        for interaction in data.get('nutrient_interactions', []):
-            interaction_copy = interaction.copy()
-            research_support = []
-            for support in interaction_copy.pop('research_support', []):
-                research_support.append(ResearchSupport(**support))
-            interaction_copy['research_support'] = research_support
-            nutrient_interactions.append(NutrientInteraction(**interaction_copy))
-        
-        contextual_factors = None
-        if 'contextual_factors' in data:
-            cf_data = data['contextual_factors'].copy()
-            
-            # Parse CircadianEffects
-            circadian_effects = None
-            if 'circadian_effects' in cf_data:
-                ce_data = cf_data.pop('circadian_effects', {})
-                factors = []
-                for factor in ce_data.pop('factors', []):
-                    factors.append(CircadianFactor(**factor))
-                circadian_effects = CircadianEffects(
-                    description=ce_data.get('description'),
-                    factors=factors
+        for field_name, (dataclass_type, nested_fields) in nested_structure.items():
+            if field_name in data_copy:
+                data_copy[field_name] = cls._create_nested_dataclass(
+                    data_copy[field_name],
+                    dataclass_type,
+                    nested_fields
                 )
-            
-            # Parse FoodCombinations
-            food_combinations = []
-            for combo in cf_data.pop('food_combinations', []):
-                food_combinations.append(FoodCombination(**combo))
-            
-            # Parse PreparationEffects
-            preparation_effects = []
-            for effect in cf_data.pop('preparation_effects', []):
-                preparation_effects.append(PreparationEffect(**effect))
-            
-            contextual_factors = ContextualFactors(
-                circadian_effects=circadian_effects,
-                food_combinations=food_combinations,
-                preparation_effects=preparation_effects
+        
+        # Handle lists of dataclasses
+        list_fields = {
+            'mental_health_impacts': (MentalHealthImpact, {'research_support': ResearchSupport}),
+            'nutrient_interactions': (NutrientInteraction, {'research_support': ResearchSupport}),
+            'population_variations': (PopulationVariation, {'variations': NutrientVariation}),
+            'dietary_patterns': (DietaryPattern, {}),
+            'neural_targets': (NeuralTarget, {})
+        }
+        
+        for field_name, (dataclass_type, nested_fields) in list_fields.items():
+            if field_name in data_copy:
+                data_copy[field_name] = cls._create_list_of_dataclasses(
+                    data_copy[field_name],
+                    dataclass_type,
+                    nested_fields
+                )
+        
+        if 'metadata' not in data_copy:
+            data_copy['metadata'] = Metadata(
+                version='0.1.0',
+                created=datetime.now().isoformat(),
+                last_updated=datetime.now().isoformat(),
             )
         
-        population_variations = []
-        for pv in data.get('population_variations', []):
-            pv_copy = pv.copy()
-            variations = []
-            for var in pv_copy.pop('variations', []):
-                variations.append(NutrientVariation(**var))
-            pv_copy['variations'] = variations
-            population_variations.append(PopulationVariation(**pv_copy))
-        
-        dietary_patterns = []
-        for pattern in data.get('dietary_patterns', []):
-            dietary_patterns.append(DietaryPattern(**pattern))
-        
-        inflammatory_index = None
-        if 'inflammatory_index' in data:
-            inflammatory_index = InflammatoryIndex(**data['inflammatory_index'])
-        
-        neural_targets = []
-        for target in data.get('neural_targets', []):
-            neural_targets.append(NeuralTarget(**target))
-        
-        processed = data.get('processed', False)
-        validated = data.get('validated', False)
-        validation_errors = data.get('validation_errors', [])
-
-        return cls(
-            food_id=data.get('food_id', ''),
-            name=data.get('name', ''),
-            category=data.get('category', ''),
-            description=data.get('description'),
-            standard_nutrients=standard_nutrients,
-            serving_info=serving_info,
-            brain_nutrients=brain_nutrients,
-            bioactive_compounds=bioactive_compounds,
-            mental_health_impacts=mental_health_impacts,
-            nutrient_interactions=nutrient_interactions,
-            contextual_factors=contextual_factors,
-            population_variations=population_variations,
-            dietary_patterns=dietary_patterns,
-            inflammatory_index=inflammatory_index,
-            neural_targets=neural_targets,
-            data_quality=data_quality,
-            metadata=metadata,
-            processed=processed,
-            validated=validated,
-            validation_errors=validation_errors
-        )
+        # Create the FoodData instance
+        return cls(**data_copy)
 
 @dataclass
 class EvaluationMetrics:

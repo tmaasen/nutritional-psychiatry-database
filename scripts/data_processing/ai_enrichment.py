@@ -155,7 +155,6 @@ class AIEnrichmentEngine:
         return enriched_data
     
     def _has_complete_bioactives(self, bioactive_compounds):
-        """Check if all required bioactive compounds exist."""
         required = ["polyphenols_mg", "flavonoids_mg", "anthocyanins_mg", 
                    "carotenoids_mg", "probiotics_cfu", "prebiotic_fiber_g"]
         
@@ -164,11 +163,9 @@ class AIEnrichmentEngine:
                   for attr in required)
     
     def enrich_mental_health_impacts(self, food_data: FoodData) -> FoodData:
-        """Predict mental health impacts using AI."""
         food = food_data
         enriched_data = FoodData.from_dict(food_data.to_dict())
         
-        # Check if impacts already exist
         if food.mental_health_impacts and len(food.mental_health_impacts) > 0:
             logger.info(f"Mental health impacts already exist for {food.name}")
             return enriched_data

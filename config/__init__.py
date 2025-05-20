@@ -9,25 +9,19 @@ import logging
 import os
 from typing import Dict, Any, Optional
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
-class Config:
-    """Centralized configuration management."""
-    
+class Config:    
     def __init__(self):
-        # Initialize config_data
         self.config_data = {}
 
         load_dotenv()
          
-        # API keys with fallbacks
         self.api_keys = {
             "USDA_API_KEY": get_env("USDA_API_KEY"),
             "OPENAI_API_KEY": get_env("OPENAI_API_KEY")
         }
         
-        # API configuration
         self.api_config = {
             "USDA_API_BASE_URL": get_env("USDA_API_BASE_URL", "https://api.nal.usda.gov/fdc/v1"),
             "OPENFOODFACTS_API_BASE_URL": get_env(
@@ -36,20 +30,17 @@ class Config:
             "RATE_LIMIT_DELAY": float(get_env("RATE_LIMIT_DELAY", "0.5"))
         }
         
-        # AI settings
         self.ai_settings = {
             "model": get_env("AI_MODEL", "gpt-4o-mini"),
             "temperature": float(get_env("AI_TEMPERATURE", "0.2")),
             "max_tokens": int(get_env("AI_MAX_TOKENS", "2000"))
         }
         
-        # Processing settings
         self.processing = {
             "batch_size": int(get_env("BATCH_SIZE", "10")),
             "force_reprocess": self._parse_bool(get_env("FORCE_REPROCESS", "False"))
         }
         
-        # Literature sources (from config file)
         self.literature_sources = self.config_data.get("literature_sources", [])
     
     def _parse_bool(self, value):

@@ -61,15 +61,14 @@ class ConfidenceCalibrationSystem:
         Returns:
             Dictionary with calibration parameters by nutrient and food category
         """
-        model = {
-            "global": {
-                "nutrient_adjustments": {},
-                "category_adjustments": {},
-                "overall_confidence_adjustment": 0.0
-            }
-        }
-        
         try:
+            model = {
+                "global": {
+                    "overall_confidence_adjustment": 0.0,
+                    "nutrient_adjustments": {}
+                }
+            }
+            
             # Find the most recent evaluation metrics in the database
             query = """
             SELECT metrics_data 
@@ -116,20 +115,16 @@ class ConfidenceCalibrationSystem:
                 mape = summary["mean_absolute_percentage_error"]
                 confidence_error = summary.get("confidence_calibration_error", 0)
                 
-                # If AI is generally overconfident (common issue), reduce confidence
                 if confidence_error > 2:
                     model["global"]["overall_confidence_adjustment"] = -confidence_error / 2
                 
-                # Adjust overall confidence based on MAPE
                 if mape > 50:
                     model["global"]["overall_confidence_adjustment"] -= 1.0
             
             logger.info(f"Calibration model built with {len(model['global']['nutrient_adjustments'])} nutrient-specific adjustments")
-            logger.info(f"Global confidence adjustment: {model['global']['overall_confidence_adjustment']}")
             
         except Exception as e:
             logger.error(f"Error loading evaluation metrics from database: {e}", exc_info=True)
-            # Continue with default model
         
         return model
     
@@ -398,12 +393,10 @@ class ConfidenceCalibrationSystem:
             food_data = item['food_data']
             
             try:
-                logger.debug(f"Calibrating {food_id}: {item['name']}")
                 calibrated = self.calibrate_confidence(food_data)
                 
                 if self.save_calibrated_food(food_id, calibrated):
                     success_count += 1
-                    logger.debug(f"Successfully calibrated {food_id}")
                 else:
                     failure_count += 1
                     logger.warning(f"Failed to save calibrated food {food_id}")
@@ -432,41 +425,30 @@ class ConfidenceCalibrationSystem:
         
         offset = 0
         while True:
-            # Get batch of foods to calibrate
             batch = self.get_foods_to_calibrate(self.batch_size, offset)
             
             if not batch:
-                logger.info(f"No more foods to calibrate")
                 break
             
             stats["batches"] += 1
             stats["total_processed"] += len(batch)
             
-            # Process batch
-            logger.info(f"Processing batch {stats['batches']} ({len(batch)} foods)")
             success, failure = self.calibrate_batch(batch)
             
             stats["successfully_calibrated"] += success
             stats["failed"] += failure
             
-            # Update offset for next batch
             offset += len(batch)
             
-            # Log progress
-            logger.info(f"Batch {stats['batches']} completed: {success} succeeded, {failure} failed")
-            
-            # Exit if batch is smaller than batch size (last batch)
             if len(batch) < self.batch_size:
                 break
         
-        # Calculate timing
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         stats["duration_seconds"] = duration
         stats["foods_per_second"] = stats["total_processed"] / duration if duration > 0 else 0
         
         logger.info(f"Calibration complete: {stats['successfully_calibrated']} succeeded, {stats['failed']} failed")
-        logger.info(f"Total time: {duration:.2f} seconds ({stats['foods_per_second']:.2f} foods/sec)")
         
         return stats
 

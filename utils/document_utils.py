@@ -93,35 +93,29 @@ class PDFExtractor:
     
     def _extract_metadata(self, first_page_text: str, pdf_metadata: Dict) -> Optional[StudyMetadata]:
         """Extract study metadata from PDF first page and metadata."""
-        # Default values
         title = ""
         authors = []
         publication = ""
         year = 2000
         doi = None
         
-        # Try to extract title (usually first line or pdf title)
         if pdf_metadata and "title" in pdf_metadata and pdf_metadata["title"]:
             title = pdf_metadata["title"]
         else:
-            # Try first line of first page
             lines = first_page_text.split('\n')
             if lines:
                 title = lines[0]
         
-        # Try to extract authors
         author_line = ""
-        for line in first_page_text.split('\n')[:10]:  # Check first 10 lines
+        for line in first_page_text.split('\n')[:10]:
             if "," in line and not line.startswith("Abstract") and not line.startswith("Keywords"):
                 author_line = line
                 break
         
         if author_line:
-            # Simple heuristic: split by commas and "and"
             author_parts = re.split(r',|\sand\s', author_line)
             authors = [part.strip() for part in author_parts if part.strip()]
         
-        # Try to extract year
         year_match = re.search(r'(19|20)\d{2}', first_page_text[:1000])
         if year_match:
             try:
@@ -129,14 +123,12 @@ class PDFExtractor:
             except ValueError:
                 pass
         
-        # Try to extract DOI
         doi_match = re.search(r'doi:?\s*([^\s]+)', first_page_text, re.IGNORECASE)
         if doi_match:
             doi = doi_match.group(1)
         
-        # Try to extract publication
         publication_indicators = ["journal", "proceedings", "conference", "volume", "issue"]
-        for line in first_page_text.split('\n')[:20]:  # Check first 20 lines
+        for line in first_page_text.split('\n')[:20]:
             if any(indicator in line.lower() for indicator in publication_indicators):
                 publication = line.strip()
                 break
@@ -199,30 +191,25 @@ class WebPageExtractor:
     
     def _extract_metadata(self, soup: BeautifulSoup, url: str) -> Optional[StudyMetadata]:
         """Extract study metadata from web page."""
-        # Try to extract title
         title = ""
         title_tag = soup.find('title')
         if title_tag:
             title = title_tag.text
         
-        # Try meta tags
         meta_title = soup.find('meta', {'property': 'og:title'}) or soup.find('meta', {'name': 'title'})
         if meta_title and 'content' in meta_title.attrs:
             title = meta_title['content']
         
-        # Try to extract authors
         authors = []
         author_meta = soup.find('meta', {'name': 'author'}) or soup.find('meta', {'property': 'article:author'})
         if author_meta and 'content' in author_meta.attrs:
             authors = [author.strip() for author in author_meta['content'].split(',')]
         
-        # Try to extract publication
         publication = ""
         site_name = soup.find('meta', {'property': 'og:site_name'})
         if site_name and 'content' in site_name.attrs:
             publication = site_name['content']
         
-        # Try to extract year
         year = datetime.now().year
         pub_date = soup.find('meta', {'property': 'article:published_time'}) or soup.find('meta', {'name': 'date'})
         if pub_date and 'content' in pub_date.attrs:
@@ -233,7 +220,6 @@ class WebPageExtractor:
             except (ValueError, TypeError):
                 pass
         
-        # Try to extract DOI
         doi = None
         doi_link = soup.find('a', href=re.compile(r'doi.org'))
         if doi_link:

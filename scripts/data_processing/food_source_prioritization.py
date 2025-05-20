@@ -586,56 +586,22 @@ class SourcePrioritizer:
         return metadata
     
     def merge_foods_by_name(self, food_name: str) -> Optional[str]:
-        """
-        Find foods with similar names and merge them.
-        
-        Args:
-            food_name: Name to search for
-            
-        Returns:
-            Food ID of the merged food
-        """
         try:
-            # Find similar foods in database
-            sources = ["usda", "openfoodfacts", "literature", "ai_generated"]
-            food_entries = []
+            foods = self.get_foods_by_name(food_name)
             
-            for source in sources:
-                # Query foods by name and source type
-                food_results = self.db_client.execute_query(
-                    FOOD_GET_BY_NAME_AND_SOURCE, 
-                    (f"%{food_name}%", source)
-                )
-                
-                if food_results:
-                    for food_result in food_results:
-                        food_id = food_result["food_id"]
-                        # Get the complete food data
-                        food = self.db_client.get_food_by_id(food_id)
-                        if food:
-                            food_entries.append(food)
-            
-            if not food_entries:
-                logger.warning(f"No foods found matching '{food_name}'")
+            if not foods:
                 return None
             
-            # Merge food entries
-            merged_data = self.merge_food_data(food_entries)
+            if len(foods) == 1:
+                return foods[0]['food_id']
             
-            if not merged_data or not merged_data.food_id:
-                logger.warning(f"Failed to merge data for '{food_name}'")
+            merged_data = self.merge_food_data(foods)
+            
+            if not merged_data:
                 return None
             
-            # Save merged data to database with 'merged' source
-            merged_id = f"merged_{merged_data.food_id}"
-            merged_data.food_id = merged_id
-            
-            # Save merged food to database
-            saved_id = self.db_client.import_food_from_json(merged_data)
-            
-            if saved_id:
-                logger.info(f"Successfully merged and saved data for '{food_name}' with ID {merged_id}")
-                return merged_id
+            if self.save_merged_food(merged_data):
+                return merged_data['food_id']
             
             logger.warning(f"Failed to save merged data for '{food_name}'")
             return None
@@ -645,17 +611,7 @@ class SourcePrioritizer:
             return None
     
     def merge_all_foods(self, batch_size: int = 100) -> List[str]:
-        """
-        Merge all foods in the database by similar names.
-        
-        Args:
-            batch_size: Number of foods to process in each batch
-            
-        Returns:
-            List of IDs of merged foods
-        """
         try:
-            # Get all distinct food names from database
             food_names_results = self.db_client.execute_query(FOOD_GET_DISTINCT_NAMES)
             
             if not food_names_results:
@@ -665,12 +621,10 @@ class SourcePrioritizer:
             food_names = [result["name"] for result in food_names_results]
             logger.info(f"Found {len(food_names)} distinct food names to merge")
             
-            # Process in batches
             merged_ids = []
             
             for i in range(0, len(food_names), batch_size):
                 batch = food_names[i:i+batch_size]
-                logger.info(f"Processing batch {i//batch_size + 1}/{(len(food_names)-1)//batch_size + 1} ({len(batch)} foods)")
                 
                 for food_name in batch:
                     merged_id = self.merge_foods_by_name(food_name)

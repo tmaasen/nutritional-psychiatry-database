@@ -51,30 +51,6 @@ class FoodDataTransformer:
             }
         }
         self.category_mapping = FOOD_CATEGORY_MAPPING
-    
-    def transform(self, food: FoodData) -> FoodData:
-        """
-        Transform a FoodData object by applying standardization and normalization.
-        
-        Args:
-            food: FoodData object to transform
-            
-        Returns:
-            Transformed FoodData object
-        """
-        # Make a copy to avoid modifying the original
-        transformed = copy.deepcopy(food)
-        
-        # Apply category normalization
-        transformed.normalize_category()
-        
-        # Update timestamps
-        transformed.update_timestamp()
-        
-        # Mark as processed
-        transformed.processed = True
-        
-        return transformed
 
     def transform_usda_data(self, usda_food: Dict) -> Dict:
         """
