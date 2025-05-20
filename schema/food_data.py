@@ -10,7 +10,6 @@ from constants.food_data_enums import (
 from constants.food_data_constants import (
     DEFAULT_CONFIDENCE_RATINGS, FOOD_CATEGORY_MAPPING
 )
-from utils.completeness_utils import calculate_completeness
 
 @dataclass
 class ServingInfo:

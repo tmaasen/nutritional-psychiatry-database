@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Union
 
 # Import utility modules
 from schema.food_data import BioactiveCompounds, BrainNutrients, DataQuality, FoodData, InflammatoryIndex, Metadata, Omega3, ServingInfo, StandardNutrients
+from schema.schema_validator import SchemaValidator
 from utils.logging_utils import setup_logging
 from utils.data_utils import generate_food_id
 from constants.food_data_constants import (
@@ -68,12 +69,9 @@ class FoodDataTransformer:
             logger.warning("Empty USDA food data")
             return {}
 
-        nutrients = food.get("foodNutrients", [])
-        
-        # Generate food ID
+        nutrients = food.get("foodNutrients", [])        
         food_id = generate_food_id("usda", food.get('fdcId', ''))
         
-        # Create metadata
         source_url = f"https://fdc.nal.usda.gov/fdc-app.html#/food-details/{food.get('fdcId', '')}/nutrients"
         metadata = Metadata(
             version="0.1.0",
@@ -85,11 +83,9 @@ class FoodDataTransformer:
             }
         )
         
-        # Map category
         category = food.get("foodCategory", {}).get("description", "Miscellaneous")
         mapped_category = self._map_category(category, is_tag=False)
 
-        # Extract nutrients
         standard_nutrients = self._extract_usda_standard_nutrients(nutrients)
         brain_nutrients = self._extract_usda_brain_nutrients(nutrients)
 
@@ -115,9 +111,15 @@ class FoodDataTransformer:
             metadata=metadata
         )
 
-        # Calculate completeness
         completeness = calculate_completeness(transformed, COMPLETENESS_REQUIRED_FIELDS)
         transformed.data_quality.completeness = completeness
+
+        transformed.normalize_category()
+        
+        SchemaValidator.validate_food_data(transformed.to_dict())
+        
+        transformed.update_timestamp()
+        transformed.processed = True
         
         return transformed
     
@@ -131,7 +133,6 @@ class FoodDataTransformer:
         Returns:
             FoodData object in our schema format
         """
-        # Extract product data
         product = off_product.get("product", {})
         
         if not product:
@@ -198,6 +199,13 @@ class FoodDataTransformer:
         
         # Calculate inflammatory index
         transformed.inflammatory_index = self._calculate_inflammatory_index(product, nutriments)
+
+        transformed.normalize_category()
+        
+        SchemaValidator.validate_food_data(transformed.to_dict())
+        
+        transformed.update_timestamp()
+        transformed.processed = True
         
         return transformed
 

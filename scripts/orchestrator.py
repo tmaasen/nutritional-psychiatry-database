@@ -275,97 +275,6 @@ class DatabaseOrchestrator:
         
         return self.run_step(step_name, execute)
     
-    def transform_data(self) -> List[str]:
-        """Transform collected data to match our schema."""
-        step_name = "data_transformation"
-        
-        def execute() -> List[str]:
-            transformed_ids = []
-            
-            # Get all foods from database that need transformation
-            query = """
-            SELECT food_id, name, food_data 
-            FROM foods 
-            WHERE processed = FALSE OR %s
-            LIMIT %s
-            """
-            
-            batch_size = self.batch_size
-            offset = 0
-            
-            while True:
-                try:
-                    # Get batch of foods
-                    results = self.db_client.execute_query(
-                        query, 
-                        (self.force_reprocess, batch_size)
-                    )
-                    
-                    if not results:
-                        logger.info("No more foods to transform")
-                        break
-                    
-                    logger.info(f"Transforming batch of {len(results)} foods")
-                    
-                    for item in results:
-                        food_id = item['food_id']
-                        food_name = item['name']
-                        food_data = item['food_data']
-                        
-                        try:
-                            # Convert to FoodData object
-                            food_obj = FoodData.from_dict(food_data)
-                            
-                            # Transform the food data
-                            food_obj.normalize_category()
-                            
-                            # Validate the transformed data
-                            validation_errors = self.validator.validate_food_data(food_obj.to_dict())
-                            
-                            if validation_errors:
-                                logger.warning(f"Validation errors for {food_name}: {validation_errors}")
-                                continue
-                            
-                            # Save the transformed data to normalized tables
-                            self._save_normalized_data(food_obj)
-                            
-                            # Update the foods table
-                            with self.db_client.get_cursor() as cursor:
-                                update_query = """
-                                UPDATE foods
-                                SET processed = TRUE, last_updated = NOW()
-                                WHERE food_id = %s
-                                RETURNING food_id
-                                """
-                                
-                                cursor.execute(update_query, (food_obj.to_dict(), food_id))
-                                result = cursor.fetchone()
-                                
-                                if result and result['food_id'] == food_id:
-                                    transformed_ids.append(food_id)
-                                    logger.info(f"Transformed {food_name} with ID {food_id}")
-                                else:
-                                    logger.warning(f"Failed to update {food_name} with ID {food_id}")
-                        
-                        except Exception as e:
-                            logger.error(f"Error transforming {food_name}: {e}", exc_info=True)
-                            raise
-                    
-                    # Move to next batch
-                    offset += batch_size
-                    
-                    # Exit if batch is smaller than batch size (last batch)
-                    if len(results) < batch_size:
-                        break
-                
-                except Exception as e:
-                    logger.error(f"Error processing transformation batch: {e}", exc_info=True)
-                    raise
-            
-            return transformed_ids
-        
-        return self.run_step(step_name, execute)
-    
     def enrich_with_ai(self) -> List[str]:
         """Enrich data with AI-generated information."""
         step_name = "ai_enrichment"
@@ -517,11 +426,9 @@ class DatabaseOrchestrator:
             ("usda_data_collection", self.collect_usda_data, []),
             ("openfoodfacts_data_collection", self.collect_openfoodfacts_data, []),
             ("literature_data_collection", self.collect_literature_data, []),
-            ("data_transformation", self.transform_data, ["usda_data_collection", "openfoodfacts_data_collection", "literature_data_collection"]),
-            ("ai_enrichment", self.enrich_with_ai, ["data_transformation"]),
-            ("known_answer_validation", self.validate_with_known_answers, ["ai_enrichment"]),
-            ("confidence_calibration", self.calibrate_confidence, ["known_answer_validation"]),
-            ("source_merging", self.merge_sources, ["confidence_calibration"])
+            ("source_merging", self.merge_sources, ["usda_data_collection", "openfoodfacts_data_collection", "literature_data_collection"]),
+            ("ai_enrichment", self.enrich_with_ai, ["source_merging"]),     ("known_answer_validation", self.validate_with_known_answers, ["ai_enrichment"]),
+            ("confidence_calibration", self.calibrate_confidence, ["known_answer_validation"])
         ]
         
         success = True
@@ -544,12 +451,11 @@ class DatabaseOrchestrator:
             print("1. Collect USDA data")
             print("2. Collect OpenFoodFacts data")
             print("3. Collect literature data")
-            print("4. Transform data")
+            print("4. Merge sources")
             print("5. Enrich with AI")
             print("6. Validate with known answers")
             print("7. Calibrate confidence")
-            print("8. Merge sources")
-            print("9. Run all steps")
+            print("8. Run all steps")
             print("0. Exit")
             
             choice = input("\nEnter your choice (0-9): ")
@@ -563,7 +469,7 @@ class DatabaseOrchestrator:
             elif choice == "3":
                 self.collect_literature_data()
             elif choice == "4":
-                self.transform_data()
+                self.merge_sources()
             elif choice == "5":
                 self.enrich_with_ai()
             elif choice == "6":
@@ -571,8 +477,6 @@ class DatabaseOrchestrator:
             elif choice == "7":
                 self.calibrate_confidence()
             elif choice == "8":
-                self.merge_sources()
-            elif choice == "9":
                 self.run_all()
             else:
                 print("Invalid choice. Please try again.")
