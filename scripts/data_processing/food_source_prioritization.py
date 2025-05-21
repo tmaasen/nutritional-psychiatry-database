@@ -27,7 +27,6 @@ from constants.literature_constants import (
     SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
 )
 
-# Initialize logger
 logger = setup_logging(__name__)
 
 class SourcePrioritizer:
@@ -584,16 +583,13 @@ class SourcePrioritizer:
         metadata.tags = list(all_tags)
         
         return metadata
-    
+
     def merge_foods_by_name(self, food_name: str) -> Optional[str]:
         try:
-            foods = self.get_foods_by_name(food_name)
+            foods = self.db_client.get_food_by_id_or_name(food_id=None, food_name=food_name)
             
             if not foods:
                 return None
-            
-            if len(foods) == 1:
-                return foods[0]['food_id']
             
             merged_data = self.merge_food_data(foods)
             

@@ -279,7 +279,7 @@ def main():
         
         if args.food_id:
             # Enrich a specific food
-            food = db_client.get_food_by_id(args.food_id)
+            food = db_client.get_food_by_id_or_name(args.food_id)
             if food:
                 enriched_food = enricher.fully_enrich_food(food)
                 logger.info(f"Successfully enriched {food.name}")

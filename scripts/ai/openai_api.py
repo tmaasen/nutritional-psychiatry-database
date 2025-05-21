@@ -183,7 +183,7 @@ class OpenAIAPI:
         
         try:
             # Get existing food data
-            food_data = await self.db_client.get_food_by_id(food_id)
+            food_data = await self.db_client.get_food_by_id_or_name(food_id)
             if not food_data:
                 logger.warning(f"Food {food_id} not found in database")
                 return False

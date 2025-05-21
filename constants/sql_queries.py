@@ -19,9 +19,15 @@ RETURNING food_id
 
 # Get a food record by ID
 FOOD_GET_BY_ID = """
-SELECT id, food_id, name, description, category, created_at, updated_at
+SELECT food_id, name, description, category, created_at, updated_at
 FROM foods
 WHERE food_id = %s
+"""
+
+FOOD_GET_BY_NAME = """
+SELECT food_id, name, description, category, created_at, updated_at
+FROM foods
+WHERE name ILIKE %s
 """
 
 # Get foods that need processing
@@ -57,7 +63,7 @@ WHERE food_id = %s
 # Get all distinct food names
 FOOD_GET_DISTINCT_NAMES = """
 SELECT DISTINCT name FROM foods
-WHERE source IN ('usda', 'openfoodfacts', 'literature', 'ai_generated')
+WHERE SPLIT_PART(food_id, '_', 1) IN ('usda', 'off', 'lit', 'ai')
 """
 
 # Get similar foods by name

@@ -409,7 +409,7 @@ class PostgresClient:
             logger.error(f"Error importing food from JSON: {e}")
             raise
 
-    def get_food_by_id(self, food_id: str) -> Optional[FoodData]:
+    def get_food_by_id_or_name(self, food_id: Optional[str], food_name: Optional[str]) -> Optional[FoodData]:
         """
         Get a complete food profile by ID.
         
@@ -420,19 +420,30 @@ class PostgresClient:
             Complete food data object or None if not found
         """
         try:
-            # Get basic food information
-            food_results = self.execute_query(FOOD_GET_BY_ID, (food_id,))
+            if food_id:
+                food_results = self.execute_query(FOOD_GET_BY_ID, (food_id,))
+            elif food_name:
+                food_results = self.execute_query(FOOD_GET_BY_NAME, (food_name,))
             
             if not food_results:
                 logger.warning(f"Food with ID {food_id} not found")
                 return None
             
-            # Initialize food data with basic information
+            # Initialize required fields
+            standard_nutrients = {}
+            food_id = food_results[0]["food_id"]
+            name = food_results[0]["name"]
+            data_quality = {}
+            metadata = {}
+
             food_data = FoodData(
                 food_id=food_id,
-                name=food_results[0]["name"],
+                name=name, 
                 description=food_results[0]["description"],
                 category=food_results[0]["category"],
+                standard_nutrients=standard_nutrients,
+                data_quality=data_quality,
+                metadata=metadata
             )
             
             # Get standard nutrients
@@ -549,7 +560,7 @@ class PostgresClient:
             foods = []
             for result in results:
                 food_id = result["food_id"]
-                food = self.get_food_by_id(food_id)
+                food = self.get_food_by_id_or_name(food_id)
                 if food:
                     foods.append(food)
             
