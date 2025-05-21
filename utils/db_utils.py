@@ -409,16 +409,35 @@ class PostgresClient:
             logger.error(f"Error importing food from JSON: {e}")
             raise
 
-    def get_food_by_id_or_name(self, food_id: Optional[str], food_name: Optional[str]) -> Optional[FoodData]:
-        """
-        Get a complete food profile by ID.
-        
-        Args:
-            food_id: Food ID (e.g., "usda_173950")
+    def get_foods_by_name(self, food_name: str) -> List[FoodData]:
+        try:
+            query = """
+            SELECT food_id 
+            FROM foods
+            WHERE name ILIKE %s 
+            AND SPLIT_PART(food_id, '_', 1) IN ('usda', 'off', 'lit', 'ai')
+            """
+            food_results = self.execute_query(query, (f"%{food_name}%",))
             
-        Returns:
-            Complete food data object or None if not found
-        """
+            if not food_results:
+                logger.warning(f"No foods found with name '{food_name}'")
+                return []
+            
+            # Get complete food data for each ID
+            foods = []
+            for result in food_results:
+                food_id = result["food_id"]
+                food = self.get_food_by_id_or_name(food_id, None)
+                if food:
+                    foods.append(food)
+            
+            return foods
+            
+        except Exception as e:
+            logger.error(f"Error getting foods by name '{food_name}': {e}")
+            return []
+
+    def get_food_by_id_or_name(self, food_id: Optional[str], food_name: Optional[str]) -> Optional[FoodData]:
         try:
             if food_id:
                 food_results = self.execute_query(FOOD_GET_BY_ID, (food_id,))

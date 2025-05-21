@@ -204,13 +204,11 @@ class DatabaseOrchestrator:
             if not self.food_list:
                 return []
             
-            # Process in batches
             for i in range(0, len(self.food_list), self.batch_size):
                 batch = self.food_list[i:i+self.batch_size]
                 
                 for food_query in batch:
                     try:
-                        # Use the existing search_and_import function
                         imported_foods = off_search_and_import(
                             api_client=self.off_client,
                             db_client=self.db_client,

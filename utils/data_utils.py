@@ -65,3 +65,15 @@ def calculate_completeness(merged_data: FoodData, required_fields=None) -> float
         return round(filled_fields / total_fields, 2)
     return 0.0
 
+def normalize_food_name(name: str) -> str:
+    normalized = name.lower()
+    normalized = re.sub(r'\([^)]*\)', '', normalized)
+    
+    words_to_remove = ["organic", "natural", "fresh", "frozen", "raw", "pure", "premium"]
+    for word in words_to_remove:
+        normalized = re.sub(r'\b' + word + r'\b', '', normalized, flags=re.IGNORECASE)
+    
+    normalized = re.sub(r'[^\w\s]', '', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    
+    return normalized

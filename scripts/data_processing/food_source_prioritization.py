@@ -1,31 +1,21 @@
 #!/usr/bin/env python3
-"""
-Source Prioritization System
-Compares and merges data from different sources (USDA, OpenFoodFacts) with intelligent prioritization.
-"""
-
-import argparse
 from datetime import datetime
-import sys
-from typing import Dict, List, Optional, Tuple
+import re
+from typing import Dict, List, Optional
 
 from schema.food_data import (
-    CircadianEffects, ContextualFactors, FoodData, NeuralTarget, PopulationVariation, StandardNutrients, BrainNutrients, Omega3, BioactiveCompounds,
-    MentalHealthImpact, ResearchSupport, NutrientInteraction, DataQuality,
-    SourcePriority, Metadata
+    CircadianEffects, ContextualFactors, FoodData, StandardNutrients, BrainNutrients, Omega3, BioactiveCompounds,
+    DataQuality, Metadata
 )
 
-# Import utilities
-from utils.data_utils import identify_source
+from utils.data_utils import identify_source, normalize_food_name
 from utils.logging_utils import setup_logging
 from utils.db_utils import PostgresClient
 from utils.data_utils import calculate_completeness
 
 from constants.sql_queries import *
 from constants.food_data_constants import BRAIN_NUTRIENTS_TO_PREDICT
-from constants.literature_constants import (
-    SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS, SOURCE_PRIORITY_FIELD
-)
+from constants.literature_constants import SOURCE_PRIORITY_MAPPING, SOURCE_CONFIDENCE_THRESHOLDS
 
 logger = setup_logging(__name__)
 
@@ -33,7 +23,6 @@ class SourcePrioritizer:
     """
     Prioritizes and merges data from multiple sources based on data quality.
     """
-    
     def __init__(self, db_client: Optional[PostgresClient] = None):
         self.db_client = db_client or PostgresClient()
         self.default_priorities = SOURCE_PRIORITY_MAPPING        
@@ -80,14 +69,6 @@ class SourcePrioritizer:
     def merge_food_data(self, food_entries: List[FoodData]) -> FoodData:
         """
         Merge multiple food entries into one, prioritizing data sources.
-        
-        This version works with the normalized database schema.
-        
-        Args:
-            food_entries: List of FoodData objects to merge
-            
-        Returns:
-            Merged FoodData object
         """
         if not food_entries:
             logger.warning("No food entries provided for merging")
@@ -105,35 +86,28 @@ class SourcePrioritizer:
         ]
         entries_with_completeness.sort(key=lambda x: x[1], reverse=True)
         
-        # Use the most complete entry as the base
         base_entry, _ = entries_with_completeness[0]
         merged = base_entry.copy()
         
-        # Track sources used for each section
         source_priority = {}
         
-        # Merge each section according to priority rules
         self._merge_standard_nutrients(merged, food_entries, source_priority)
         self._merge_brain_nutrients(merged, food_entries, source_priority)
         self._merge_bioactive_compounds(merged, food_entries, source_priority)
         self._merge_mental_health_impacts(merged, food_entries, source_priority)
         self._merge_contextual_factors(merged, food_entries)
         
-        # Additional new schema sections
         self._merge_nutrient_interactions(merged, food_entries)
         self._merge_inflammatory_index(merged, food_entries)
         self._merge_population_variations(merged, food_entries)
         self._merge_neural_targets(merged, food_entries)
         
-        # Update metadata
         merged.metadata = self._create_merged_metadata(merged, food_entries)
         
-        # Update data quality section with source priority
         if not merged.data_quality:
             merged.data_quality = DataQuality()
         merged.data_quality.source_priority = source_priority
         
-        # Calculate new completeness score
         merged.data_quality.completeness = calculate_completeness(merged)
         
         return merged
@@ -151,16 +125,18 @@ class SourcePrioritizer:
         
         # Try each source in priority order
         for source in priority_list:
-            for entry in entries:
-                entry_source = identify_source(entry)
-                if entry_source != source:
-                    continue
+            # Get all matching entries for this source
+            matching_entries = [entry for entry in entries 
+                            if identify_source(entry) == source and entry.standard_nutrients]
+            
+            if matching_entries:
+                # Find the most complete entry from this source
+                best_entry = max(matching_entries, 
+                            key=lambda e: self._count_non_null_attrs(e.standard_nutrients))
                 
-                if entry.standard_nutrients:
-                    # Check if this source has better completeness for standard nutrients
-                    if used_source is None or self._count_non_null_attrs(entry.standard_nutrients) > self._count_non_null_attrs(merged.standard_nutrients):
-                        merged.standard_nutrients = entry.standard_nutrients.copy()
-                        used_source = entry_source
+                if used_source is None or self._count_non_null_attrs(best_entry.standard_nutrients) > self._count_non_null_attrs(merged.standard_nutrients):
+                    merged.standard_nutrients = best_entry.standard_nutrients.copy()
+                    used_source = source
         
         # If we used a source, record it
         if used_source:
@@ -584,89 +560,138 @@ class SourcePrioritizer:
         
         return metadata
 
-    def merge_foods_by_name(self, food_name: str) -> Optional[str]:
+    def has_conflicting_nutrients(food1: FoodData, food2: FoodData, tolerance: float = 0.5) -> bool:
+        """
+        Check if two foods have conflicting nutrient values.
+        
+        Args:
+            food1: First food
+            food2: Second food
+            tolerance: Tolerance for difference as a percentage (0.0-1.0)
+            
+        Returns:
+            True if foods have conflicting nutrients, False otherwise
+        """
+        if not hasattr(food1, 'standard_nutrients') or not hasattr(food2, 'standard_nutrients'):
+            return False
+            
+        key_nutrients = ["calories", "protein_g", "carbohydrates_g", "fat_g"]
+        
+        for nutrient in key_nutrients:
+            if (not hasattr(food1.standard_nutrients, nutrient) or 
+                not hasattr(food2.standard_nutrients, nutrient) or
+                getattr(food1.standard_nutrients, nutrient) is None or
+                getattr(food2.standard_nutrients, nutrient) is None):
+                continue
+            
+            value1 = getattr(food1.standard_nutrients, nutrient)
+            value2 = getattr(food2.standard_nutrients, nutrient)
+            
+            # Skip if either is zero (avoid division by zero)
+            if value1 == 0 or value2 == 0:
+                continue
+            
+            # Calculate difference as percentage
+            diff = abs(value1 - value2) / max(value1, value2)
+            
+            if diff > tolerance:
+                # Nutrient values differ too much
+                logger.debug(f"Conflicting nutrient {nutrient}: {value1} vs {value2} (diff: {diff:.2f})")
+                return True
+        
+        return False
+
+    def should_merge_foods(self, food1: FoodData, food2: FoodData) -> bool:
+        name1 = normalize_food_name(food1.name)
+        name2 = normalize_food_name(food2.name)
+        
+        if name1 == name2:
+            return True
+        
+        if name1 in name2 or name2 in name1:
+            return not self.has_conflicting_nutrients(food1, food2)
+        
+        return False
+    
+    def merge_foods_by_name(self, food_name: str) -> Dict[str, str]:
         try:
-            foods = self.db_client.get_food_by_id_or_name(food_id=None, food_name=food_name)
+            foods = self.db_client.get_foods_by_name(food_name)
             
             if not foods:
-                return None
+                logger.info(f"No foods found for '{food_name}'")
+                return {}
+                
+            if len(foods) == 1:
+                logger.info(f"Only one food found for '{food_name}', no merging needed")
+                return {normalize_food_name(foods[0].name): foods[0].food_id}
             
-            merged_data = self.merge_food_data(foods)
+            groups = {}
             
-            if not merged_data:
-                return None
+            for food in foods:
+                found_group = False
+                for group_key, group_foods in groups.items():
+                    if self.should_merge_foods(food, group_foods[0]):
+                        group_foods.append(food)
+                        found_group = True
+                        break
+                
+                if not found_group:
+                    group_key = normalize_food_name(food.name)
+                    groups[group_key] = [food]
             
-            if self.save_merged_food(merged_data):
-                return merged_data['food_id']
+            for group_key, group_foods in groups.items():
+                logger.info(f"Food group '{group_key}' has {len(group_foods)} foods: {[f.name for f in group_foods]}")
             
-            logger.warning(f"Failed to save merged data for '{food_name}'")
-            return None
+            merged_food_ids = {}
+            
+            for group_key, group_foods in groups.items():
+                if len(group_foods) >= 2:
+                    logger.info(f"Merging group '{group_key}' with {len(group_foods)} foods")
+                    merged_data = self.merge_food_data(group_foods)
+                    
+                    if merged_data:
+                        group_id = re.sub(r'[^\w]', '_', group_key).lower()
+                        merged_data.food_id = f"merged_{group_id}"
+                        
+                        merged_id = self.db_client.import_food_from_json(merged_data)
+                        merged_food_ids[group_key] = merged_id
+                        logger.info(f"Successfully merged group '{group_key}' as {merged_id}")
+                else:
+                    merged_food_ids[group_key] = group_foods[0].food_id
+                    logger.info(f"Group '{group_key}' has only 1 food, using existing {group_foods[0].food_id}")
+            
+            return merged_food_ids
             
         except Exception as e:
             logger.error(f"Error merging foods for '{food_name}': {e}", exc_info=True)
-            return None
+            return {}
     
-    def merge_all_foods(self, batch_size: int = 100) -> List[str]:
+    def merge_all_foods(self, batch_size: int = 100) -> Dict[str, List[str]]:
         try:
             food_names_results = self.db_client.execute_query(FOOD_GET_DISTINCT_NAMES)
             
             if not food_names_results:
                 logger.warning("No foods found in database")
-                return []
+                return {}
             
             food_names = [result["name"] for result in food_names_results]
             logger.info(f"Found {len(food_names)} distinct food names to merge")
             
-            merged_ids = []
+            all_merged_foods = {}
             
             for i in range(0, len(food_names), batch_size):
                 batch = food_names[i:i+batch_size]
                 
                 for food_name in batch:
-                    merged_id = self.merge_foods_by_name(food_name)
-                    if merged_id:
-                        merged_ids.append(merged_id)
+                    merged_groups = self.merge_foods_by_name(food_name)
+                    if merged_groups:
+                        all_merged_foods[food_name] = merged_groups
             
-            logger.info(f"Successfully merged {len(merged_ids)} foods")
-            return merged_ids
+            total_merged = sum(len(groups) for groups in all_merged_foods.values())
+            logger.info(f"Successfully merged foods into {total_merged} groups")
+            
+            return all_merged_foods
             
         except Exception as e:
             logger.error(f"Error merging all foods: {e}", exc_info=True)
-            return []
-
-
-def main():
-    """Main function to execute merging."""
-    parser = argparse.ArgumentParser(description="Merge food data from different sources")
-    parser.add_argument("--food-name", help="Name of food to merge (if not specified, all foods will be merged)")
-    parser.add_argument("--batch-size", type=int, default=100, help="Batch size for processing")
-    
-    args = parser.parse_args()
-    
-    try:
-        # Initialize database client
-        db_client = PostgresClient()
-        
-        # Initialize source prioritizer
-        prioritizer = SourcePrioritizer(db_client)
-        
-        if args.food_name:
-            # Merge specific food
-            merged_id = prioritizer.merge_foods_by_name(args.food_name)
-            if merged_id:
-                logger.info(f"Successfully merged food '{args.food_name}' with ID {merged_id}")
-            else:
-                logger.error(f"Failed to merge food '{args.food_name}'")
-                sys.exit(1)
-        else:
-            # Merge all foods
-            merged_ids = prioritizer.merge_all_foods(batch_size=args.batch_size)
-            logger.info(f"Successfully merged {len(merged_ids)} foods")
-    
-    except Exception as e:
-        logger.error(f"Error: {e}", exc_info=True)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+            return {}

@@ -63,21 +63,16 @@ class OpenFoodFactsAPI:
             rate_limit_delay=1.0
         )
 
-def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient, 
-                     query: str, limit: int = 3) -> List[str]:
-    """
-    Search for products, get complete data, transform, and import to database.
- 
-    Returns:
-        List of imported food IDs
-    """
+def search_and_import(api_client: OpenFoodFactsAPI, 
+                      db_client: PostgresClient, 
+                      query: str, 
+                      limit: int = 3) -> List[str]:
     if not db_client:
         raise ValueError("Database client is required for import")
         
     imported_foods = []
     food_transformer = FoodDataTransformer()
     
-    # Step 1: Search for products with country filter
     search_results = api_client.search_products(
         query=query,
         limit=limit
@@ -94,29 +89,27 @@ def search_and_import(api_client: OpenFoodFactsAPI, db_client: PostgresClient,
             product_code = product_brief.get("code")
             if not product_code:
                 continue
+
+            product_name = product_brief.get("product_name", "")
+            # Skip if name doesn't contain the search term
+            if query.lower() not in product_name.lower():
+                continue
                 
-            # Log the product we're fetching
             logger.info(f"Retrieving complete data for {product_brief.get('product_name', 'Unknown')} (Code: {product_code})")
             
-            # Fetch complete product data
             product_data = api_client.get_product(product_code)
             
-            # Check if product data contains nutrients
             if "product" not in product_data or "nutriments" not in product_data["product"]:
-                logger.warning(f"Product {product_code} does not contain nutrient data, skipping")
                 continue
             
-            # Transform the data
             transformed = food_transformer.transform_off_data(product_data)
             
-            # Import to DB
             food_id = db_client.import_food_from_json(transformed)
             imported_foods.append(food_id)
             logger.info(f"Imported {transformed.name} to database")
             count += 1
             
-            # Stop if we've reached the limit
-            if count >= limit:
+            if count >= limit or len(imported_foods) >= 1:
                 break
                 
         except Exception as e:
