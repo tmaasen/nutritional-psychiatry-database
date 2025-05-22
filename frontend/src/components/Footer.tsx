@@ -39,9 +39,6 @@ const Footer = () => {
               <Link to="/sources" className="text-sm text-muted-foreground hover:text-foreground">
                 Data Sources
               </Link>
-              <Link to="/updates" className="text-sm text-muted-foreground hover:text-foreground">
-                Updates
-              </Link>
             </nav>
           </div>
           <div className="flex flex-col space-y-4">
@@ -59,9 +56,9 @@ const Footer = () => {
             </nav>
           </div>
         </div>
-        <div className="mt-8 border-t pt-8">
+        <div className="mt-8 border-t pt-4">
           <p className="text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Nutritional Psychiatry Database. All rights reserved.
+            © {new Date().getFullYear()} TMM Solutions, LLC. All rights reserved.
           </p>
         </div>
       </div>
