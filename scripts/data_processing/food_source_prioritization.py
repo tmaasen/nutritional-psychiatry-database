@@ -109,6 +109,15 @@ class SourcePrioritizer:
         merged.data_quality.source_priority = source_priority
         
         merged.data_quality.completeness = calculate_completeness(merged)
+
+        from schema.schema_validator import SchemaValidator
+        validation_errors = SchemaValidator.validate_food_data(merged)
+        if validation_errors:
+            logger.warning(f"Merged data has validation issues: {validation_errors}")
+            merged.validated = False
+            merged.validation_errors = validation_errors
+        else:
+            merged.validated = True
         
         return merged
     

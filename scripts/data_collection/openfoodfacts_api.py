@@ -23,14 +23,13 @@ class OpenFoodFactsAPI:
         """
         params = {
             "q": query,
-            "page": 1, # Page to request, starts at 1.
-            "page_size": 1, # Number of results to return per page.
-            "langs": "['en']",
-            "fields": OFF_DEFAULT_FIELDS
+            "page": 1,
+            "page_size": limit,
+            "langs": "en",
+            "fields": OFF_DEFAULT_FIELDS,
+            "tagtype_0": "countries",
+            "tag_0": "united-states"
         }
-        
-        # if country:
-        #     params["value_0"] = "en:united-states"
         
         return make_api_request(
             url=self.search_url,
@@ -65,12 +64,8 @@ class OpenFoodFactsAPI:
 
 def search_and_import(api_client: OpenFoodFactsAPI, 
                       db_client: PostgresClient, 
-                      query: str, 
-                      limit: int = 3) -> List[str]:
-    if not db_client:
-        raise ValueError("Database client is required for import")
-        
-    imported_foods = []
+                      query: str,
+                      limit: int = 10) -> List[str]:
     food_transformer = FoodDataTransformer()
     
     search_results = api_client.search_products(
@@ -82,20 +77,38 @@ def search_and_import(api_client: OpenFoodFactsAPI,
         logger.warning(f"No results found for query '{query}'")
         return imported_foods
     
-    # Process each product up to the limit
+    # Score and sort candidates
+    candidates = []
+    for product in search_results.get("hits", []):
+        product_name = product.get("product_name", "").lower()
+        query_terms = query.lower().split()
+        
+        score = 0
+        for term in query_terms:
+            if term in product_name:
+                score += 1
+        
+        if query.lower() == product_name:
+            score += 5
+        
+        candidates.append((product, score))
+    
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    
     count = 0
-    for product_brief in search_results.get("hits", [])[:limit]:
+    imported_foods = []
+    for product, score in candidates[:limit]:
         try:
-            product_code = product_brief.get("code")
+            product_code = product.get("code")
             if not product_code:
                 continue
 
-            product_name = product_brief.get("product_name", "")
+            product_name = product.get("product_name", "")
             # Skip if name doesn't contain the search term
             if query.lower() not in product_name.lower():
                 continue
                 
-            logger.info(f"Retrieving complete data for {product_brief.get('product_name', 'Unknown')} (Code: {product_code})")
+            logger.info(f"Retrieving complete data for {product.get('product_name', 'Unknown')} (Code: {product_code})")
             
             product_data = api_client.get_product(product_code)
             
@@ -113,6 +126,6 @@ def search_and_import(api_client: OpenFoodFactsAPI,
                 break
                 
         except Exception as e:
-            logger.error(f"Error processing product {product_brief.get('code')}: {e}")
+            logger.error(f"Error processing product {product.get('code')}: {e}")
     
     return imported_foods

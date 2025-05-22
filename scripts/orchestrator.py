@@ -200,7 +200,7 @@ class DatabaseOrchestrator:
         
         def execute() -> List[str]:
             saved_ids = []
-
+            self.food_list = ["blueberries"]
             if not self.food_list:
                 return []
             
@@ -212,8 +212,7 @@ class DatabaseOrchestrator:
                         imported_foods = off_search_and_import(
                             api_client=self.off_client,
                             db_client=self.db_client,
-                            query=food_query,
-                            limit=1  # Just get the top match
+                            query=food_query
                         )
                         
                         if imported_foods:

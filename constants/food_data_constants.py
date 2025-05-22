@@ -167,7 +167,11 @@ DEFAULT_CONFIDENCE_RATINGS = {
 
 # API configuration constants
 OFF_DEFAULT_FIELDS = (
-    "code,product_name,brands,categories_tags,image_url,product_name_en,product_name,nutriscore_grade,nutriments,completeness,nutrition_grades,ecoscore_grade,brands"
+    "code,product_name,product_name_en,categories_tags,image_url,"
+    "nutriments,completeness,brands,"
+    "ingredients_text,ingredients_tags,"
+    "nova_group,nutrition_grades,ecoscore_grade,"
+    "nutrient_levels"
 )
 
 # Default brain nutrients to predict if not in USDA data
