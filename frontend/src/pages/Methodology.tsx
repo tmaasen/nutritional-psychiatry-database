@@ -242,7 +242,7 @@ const Methodology = () => {
                   <li>Known-answer testing</li>
                   <li>Validation rules</li>
                   <li>Expert review</li>
-                </ul>
+          </ul>
                 <p>Each data point includes a confidence rating and source information.</p>
               </div>
             </CardContent>

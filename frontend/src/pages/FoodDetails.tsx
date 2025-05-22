@@ -9,13 +9,13 @@ const mockFood = {
   name: "Salmon",
   category: "Seafood",
   description: "Rich in omega-3 fatty acids, particularly DHA and EPA, which are essential for brain health and have been linked to reduced depression symptoms.",
-  nutrients: [
+    nutrients: [
     { name: "Omega-3", amount: "2.3g", rda: "1.6g", impact: "High" },
     { name: "Vitamin D", amount: "13.1mcg", rda: "15mcg", impact: "Medium" },
     { name: "B12", amount: "2.6mcg", rda: "2.4mcg", impact: "High" }
-  ],
-  mentalHealthImpacts: [
-    {
+    ],
+    mentalHealthImpacts: [
+      {
       effect: "Mood Regulation",
       confidence: "High",
       evidence: "Multiple clinical trials show positive effects on depression symptoms"
